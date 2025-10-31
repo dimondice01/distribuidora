@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
 import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, getDocs, orderBy, updateDoc, runTransaction } from 'firebase/firestore';
 
-// --- Iconografía Profesional ---
+// --- Iconografía Profesional (ACTUALIZADA con Reordenamiento) ---
 const PlusIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const TruckIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 17H5a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2.5"/><path d="M15 17h4.5a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2H18"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>;
 const CheckCircleIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
@@ -12,9 +12,14 @@ const ChevronDownIcon = (props) => <svg {...props} className="transition-transfo
 const EyeIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
 const EditIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>;
 const ArchiveIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M10 12h4"/><path d="M22 4H2v4h20z"/></svg>;
+const ArrowUpIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>;
+const ArrowDownIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 12-7 7-7-7"/><path d="M12 5v14"/></svg>;
+const AlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
+
+// ... (Las funciones generateLoadingReportHTML, generateSettlementReportHTML, y printHTML quedan igual) ...
 
 const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     const productSummary = new Map();
@@ -84,7 +89,6 @@ function Rutas() {
     const [selectedRoute, setSelectedRoute] = useState(null);
     const [activeTab, setActiveTab] = useState('planificacion');
 
-    // --- CORRECCIÓN 1: Se simplifica la consulta para evitar el error 'BloomFilter'. ---
     const routesQuery = useMemo(() => query(collection(db, 'rutas'), where('estado', '!=', 'Archivada'), orderBy('fechaCreacion', 'desc')), []);
     const invoicesQuery = useMemo(() => query(collection(db, 'ventas'), where('estado', '!=', 'Archivada')), []);
     const repartidoresQuery = useMemo(() => query(collection(db, 'vendedores')), []);
@@ -100,11 +104,19 @@ function Rutas() {
     const enrichedInvoices = useMemo(() => {
         return allInvoices.map(invoice => {
             const cliente = clientes.find(c => c.id === invoice.clienteId);
-            return { ...invoice, clienteNombre: cliente?.nombre || invoice.clientName || 'N/A', clienteDireccion: cliente?.direccion || 'N/A', zonaId: cliente?.zonaId || null, cliente: cliente || null };
+            return { 
+                ...invoice, 
+                clienteNombre: cliente?.nombre || invoice.clientName || 'N/A', 
+                clienteDireccion: cliente?.direccion || 'N/A', 
+                zonaId: cliente?.zonaId || null, 
+                cliente: cliente || null 
+            };
         });
     }, [allInvoices, clientes]);
 
-    const pendingInvoices = useMemo(() => enrichedInvoices.filter(inv => inv.estado === 'Pendiente de Pago'), [enrichedInvoices]);
+    // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
+    const pendingInvoices = useMemo(() => enrichedInvoices.filter(inv => inv.estado === 'Pendiente de Entrega'), [enrichedInvoices]);
+    // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
     
     const handleCreateNewRoute = async () => {
         const today = new Date();
@@ -124,19 +136,56 @@ function Rutas() {
     };
     const handleOpenPlanner = (route) => { setSelectedRoute(route); setIsPlannerOpen(true); };
     const handleClosePlanner = () => { setIsPlannerOpen(false); setSelectedRoute(null); };
+    
+    // --- LÓGICA DE CANCELACIÓN (NUEVO) ---
+    const handleCancelRoute = async (routeToCancel) => {
+        if (!window.confirm(`¿Estás seguro de anular la ruta "${routeToCancel.nombre}"? Esto devolverá todas las facturas a 'Pendiente de Entrega'.`)) return;
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                const routeRef = doc(db, 'rutas', routeToCancel.id);
+
+                // 1. Actualizar estado de la ruta a Anulada
+                transaction.update(routeRef, {
+                    estado: 'Anulada',
+                    fechaAnulacion: Timestamp.now(),
+                    resumen: { ...routeToCancel.resumen, estadoFinal: 'Anulada' }
+                });
+
+                // 2. Devolver el estado de las facturas a Pendiente de Entrega
+                for (const facturaRef of (routeToCancel.facturas || [])) {
+                    const invoiceRef = doc(db, 'ventas', facturaRef.id);
+                    // Solo revertimos facturas que están 'Repartiendo' (para evitar tocar facturas que ya rindieron)
+                    // En este punto, solo las 'Planificada' y 'En Curso' deberían tener facturas 'Repartiendo'.
+                    
+                    // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
+                    transaction.update(invoiceRef, { 
+                        estado: 'Pendiente de Entrega', // <- Corregido
+                        rutaId: null // Limpiamos la referencia a la ruta.
+                    });
+                    // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
+                }
+            });
+            alert(`Ruta "${routeToCancel.nombre}" ha sido ANULADA y sus facturas liberadas.`);
+            handleClosePlanner();
+        } catch (error) {
+            console.error("Error al anular la ruta:", error);
+            alert("Error al anular la ruta: " + error.message);
+        }
+    };
+    // ------------------------------------
 
     if (routesLoading || invoicesLoading || repartidoresLoading || clientesLoading || zonasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
     }
 
-    // El filtrado por estado se hace en el cliente para mayor flexibilidad y evitar el error.
     const planificadas = routes.filter(r => r.estado === 'Planificada');
     const enCurso = routes.filter(r => r.estado === 'En Curso');
     const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda');
+    const anuladas = routes.filter(r => r.estado === 'Anulada'); // Nuevo estado para control
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
-            {/* SUGERENCIA 2: Se añaden estilos para animaciones */}
             <style>{`
                 @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in { animation: fade-in 0.5s ease-out forwards; opacity: 0; }
@@ -147,7 +196,7 @@ function Rutas() {
             
             <header className="flex justify-between items-center mb-8">
                 <h1 className="text-4xl font-bold text-gray-800">Gestión de Rutas</h1>
-                <button onClick={handleCreateNewRoute} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition-all transform hover:scale-105 active:scale-95">
+                <button onClick={handleCreateNewRoute} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-xl hover:bg-indigo-700 transition-all transform hover:scale-[1.02] active:scale-95">
                     <PlusIcon /> Crear Nueva Ruta
                 </button>
             </header>
@@ -156,28 +205,40 @@ function Rutas() {
                     <TabButton name="planificacion" activeTab={activeTab} onClick={setActiveTab}>Planificación ({planificadas.length})</TabButton>
                     <TabButton name="en_curso" activeTab={activeTab} onClick={setActiveTab}>En Curso ({enCurso.length})</TabButton>
                     <TabButton name="rendicion" activeTab={activeTab} onClick={setActiveTab}>Rendición ({rendicion.length})</TabButton>
+                    <TabButton name="anuladas" activeTab={activeTab} onClick={setActiveTab} color="red">Anuladas ({anuladas.length})</TabButton>
                 </nav>
             </div>
             {activeTab === 'planificacion' && <RouteList routes={planificadas} onOpenPlanner={handleOpenPlanner} title="Rutas en Planificación" allInvoices={enrichedInvoices} />}
             {activeTab === 'en_curso' && <RouteList routes={enCurso} onOpenPlanner={handleOpenPlanner} title="Rutas en Curso" allInvoices={enrichedInvoices} />}
             {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} />}
-            {isPlannerOpen && <RoutePlanner route={selectedRoute} onClose={handleClosePlanner} pendingInvoices={pendingInvoices} repartidores={repartidores} zonas={zonas} />}
+            {activeTab === 'anuladas' && <RouteList routes={anuladas} onOpenPlanner={handleOpenPlanner} title="Rutas Anuladas (Histórico)" allInvoices={enrichedInvoices} readOnly={true} />}
+
+            {isPlannerOpen && (
+                <RoutePlanner 
+                    route={selectedRoute} 
+                    onClose={handleClosePlanner} 
+                    pendingInvoices={pendingInvoices} 
+                    repartidores={repartidores} 
+                    zonas={zonas} 
+                    onCancelRoute={handleCancelRoute} // Pasamos la nueva función
+                />
+            )}
         </div>
     );
 }
 
-const TabButton = ({ name, activeTab, onClick, children }) => (
-    <button onClick={() => onClick(name)} className={`${activeTab === name ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg transition-colors`}>
+const TabButton = ({ name, activeTab, onClick, children, color = 'indigo' }) => (
+    <button onClick={() => onClick(name)} className={`${activeTab === name ? `border-${color}-500 text-${color}-600` : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg transition-colors`}>
         {children}
     </button>
 );
 
-const RouteList = ({ routes, onOpenPlanner, title, allInvoices }) => (
+const RouteList = ({ routes, onOpenPlanner, title, allInvoices, readOnly = false }) => (
     <div className="animate-fade-in">
         <h2 className="text-2xl font-bold text-gray-700 mb-4">{title}</h2>
         {routes.length === 0 ? <p className="text-gray-500 italic">No hay rutas en este estado.</p> : (
             <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {routes.map(route => (<RouteCard key={route.id} route={route} onOpenPlanner={() => onOpenPlanner(route)} allInvoices={allInvoices} />))}
+                {routes.map(route => (<RouteCard key={route.id} route={route} onOpenPlanner={() => onOpenPlanner(route)} allInvoices={allInvoices} readOnly={readOnly} />))}
             </main>
         )}
     </div>
@@ -186,13 +247,20 @@ const RouteList = ({ routes, onOpenPlanner, title, allInvoices }) => (
 const getStatusBadge = (estado) => {
     const base = "px-2.5 py-1 text-xs font-bold rounded-full inline-block uppercase tracking-wider";
     const colors = { 
-        'Pagada': "bg-green-100 text-green-800", 'Pendiente de Pago': "bg-gray-200 text-gray-800", 
-        'Repartiendo': "bg-blue-100 text-blue-800", 'Anulada': "bg-red-100 text-red-800", 'Adeuda': "bg-yellow-100 text-yellow-800",
+        'Planificada': "bg-yellow-100 text-yellow-800", 'En Curso': "bg-blue-100 text-blue-800",
+        'Completada': "bg-green-100 text-green-800", 'Adeuda': "bg-orange-100 text-orange-800",
+        'Anulada': "bg-red-100 text-red-800", 'Repartiendo': "bg-blue-100 text-blue-800",
+        'Pagada': "bg-green-100 text-green-800", 
+        // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
+        'Pendiente de Entrega': "bg-yellow-100 text-yellow-800", // <- Corregido (usamos amarillo)
+        // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
+        'Anulada (Visita)': "bg-red-100 text-red-800",
     };
     return `${base} ${colors[estado] || "bg-gray-100 text-gray-800"}`;
 };
 
 const TabContentRendicion = ({ routes, allInvoices }) => {
+    // ... (Lógica interna igual, pero con el diseño actualizado) ...
     const [expandedRouteId, setExpandedRouteId] = useState(null);
 
     const resumenCajaDiaria = useMemo(() => {
@@ -232,18 +300,18 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
 
     return (
         <div className="animate-fade-in space-y-6">
-            {/* SUGERENCIA 2: Panel de Resumen de Caja Diaria Rediseñado */}
-            <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-indigo-500">
-                <div className="flex flex-wrap justify-between items-center gap-4">
-                    <h2 className="text-2xl font-bold text-gray-800">Resumen de Caja del Día</h2>
-                    <button onClick={handleArchiveAll} className="flex items-center justify-center gap-3 px-5 py-3 bg-slate-700 text-white font-bold rounded-lg shadow-lg hover:bg-slate-800 transition-all">
-                        <ArchiveIcon className="w-6 h-6" /> Cerrar Caja y Archivar Todo
+            {/* Panel de Resumen de Caja Diaria Rediseñado (Más Moderno) */}
+            <div className="bg-white p-6 rounded-xl shadow-2xl border-l-8 border-indigo-600">
+                <div className="flex flex-wrap justify-between items-center gap-4 border-b pb-4 mb-4">
+                    <h2 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2"><TruckIcon/> Rendición de Caja del Día</h2>
+                    <button onClick={handleArchiveAll} className="flex items-center justify-center gap-3 px-6 py-3 bg-slate-700 text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all transform hover:scale-[1.02]">
+                        <ArchiveIcon className="w-5 h-5" /> Cerrar Caja y Archivar Todo
                     </button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mt-4">
-                    <div className="bg-green-50 p-4 rounded-lg"><p className="text-sm text-green-800">Efectivo a Rendir</p><p className="text-3xl font-bold text-green-900">{formatCurrency(resumenCajaDiaria.efectivo)}</p></div>
-                    <div className="bg-blue-50 p-4 rounded-lg"><p className="text-sm text-blue-800">Total Transferencias</p><p className="text-3xl font-bold text-blue-900">{formatCurrency(resumenCajaDiaria.transferencia)}</p></div>
-                    <div className="bg-yellow-50 p-4 rounded-lg"><p className="text-sm text-yellow-800">Deuda Generada Hoy</p><p className="text-3xl font-bold text-yellow-900">{formatCurrency(resumenCajaDiaria.saldoPendiente)}</p></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div className="bg-green-50 p-5 rounded-xl border border-green-200"><p className="text-sm text-green-700 font-semibold uppercase">Efectivo a Rendir</p><p className="text-4xl font-extrabold text-green-900 mt-1">{formatCurrency(resumenCajaDiaria.efectivo)}</p></div>
+                    <div className="bg-blue-50 p-5 rounded-xl border border-blue-200"><p className="text-sm text-blue-700 font-semibold uppercase">Total Transferencias</p><p className="text-4xl font-extrabold text-blue-900 mt-1">{formatCurrency(resumenCajaDiaria.transferencia)}</p></div>
+                    <div className="bg-red-50 p-5 rounded-xl border border-red-200"><p className="text-sm text-red-700 font-semibold uppercase">Deuda Generada Hoy</p><p className="text-4xl font-extrabold text-red-900 mt-1">{formatCurrency(resumenCajaDiaria.saldoPendiente)}</p></div>
                 </div>
             </div>
 
@@ -260,41 +328,45 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                 const handlePrintSettlement = () => printHTML(generateSettlementReportHTML(route, currentRouteInvoices));
 
                 return (
-                    <div key={route.id} className="bg-white rounded-xl shadow-lg transition-all duration-300">
+                    <div key={route.id} className="bg-white rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
                         <button onClick={() => setExpandedRouteId(isExpanded ? null : route.id)} className="w-full text-left p-6">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h3 className="text-2xl font-bold text-gray-800">{route.nombre}</h3>
-                                    <p className="text-sm text-gray-500">Repartidor: {route.repartidorNombre}</p>
-                                    {route.estado === 'Adeuda' && <span className="mt-2 text-xs font-bold uppercase text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">CON SALDOS PENDIENTES</span>}
+                                    <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                        {route.nombre} {route.estado === 'Adeuda' && <span className="text-sm font-bold uppercase text-yellow-600 bg-yellow-100 px-3 py-1 rounded-full">ADEUDA</span>}
+                                    </h3>
+                                    <p className="text-base text-gray-500 mt-1">Repartidor: <span className="font-semibold">{route.repartidorNombre}</span></p>
                                 </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="font-bold text-lg text-green-600">{formatCurrency(resumenFinanciero.efectivo)}</span>
+                                <div className="flex items-center gap-6">
+                                    <div className="text-right">
+                                        <p className="text-sm text-gray-500">Total Efectivo Rendido</p>
+                                        <span className="font-bold text-2xl text-green-600">{formatCurrency(resumenFinanciero.efectivo)}</span>
+                                    </div>
                                     <ChevronDownIcon style={{ transform: `rotate(${isExpanded ? '180deg' : '0deg'})` }} />
                                 </div>
                             </div>
                         </button>
                         {isExpanded && (
                             <div className="px-6 pb-6 animate-fade-in-fast">
-                                <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-center mb-4">
-                                    <div className="bg-gray-50 p-4 rounded-lg"><p className="text-sm text-gray-600">Paradas</p><p className="text-2xl font-bold text-gray-900">{(route.facturas || []).length}</p></div>
-                                    <div className="bg-green-50 p-4 rounded-lg"><p className="text-sm text-green-800">Efectivo Cobrado</p><p className="text-2xl font-bold text-green-900">{formatCurrency(resumenFinanciero.efectivo)}</p></div>
-                                    <div className="bg-blue-50 p-4 rounded-lg"><p className="text-sm text-blue-800">Transferencias</p><p className="text-2xl font-bold text-blue-900">{formatCurrency(resumenFinanciero.transferencia)}</p></div>
-                                    <div className="bg-yellow-50 p-4 rounded-lg"><p className="text-sm text-yellow-800">Saldo Pendiente</p><p className="text-2xl font-bold text-yellow-900">{formatCurrency(resumenFinanciero.saldoPendiente)}</p></div>
+                                <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-center mb-6 bg-gray-50 p-4 rounded-lg">
+                                    <div className="bg-white p-3 rounded-lg"><p className="text-sm text-gray-600">Paradas</p><p className="text-2xl font-bold text-gray-900">{(route.facturas || []).length}</p></div>
+                                    <div className="bg-white p-3 rounded-lg"><p className="text-sm text-green-800">Efectivo Cobrado</p><p className="text-2xl font-bold text-green-900">{formatCurrency(resumenFinanciero.efectivo)}</p></div>
+                                    <div className="bg-white p-3 rounded-lg"><p className="text-sm text-blue-800">Transferencias</p><p className="text-2xl font-bold text-blue-900">{formatCurrency(resumenFinanciero.transferencia)}</p></div>
+                                    <div className="bg-white p-3 rounded-lg"><p className="text-sm text-red-800">Saldo Pendiente</p><p className="text-2xl font-bold text-red-900">{formatCurrency(resumenFinanciero.saldoPendiente)}</p></div>
                                 </div>
-                                <h4 className="font-bold text-md text-gray-600 mt-6 mb-2">Detalle de Facturas</h4>
-                                <div className="overflow-y-auto max-h-72 border rounded-lg">
+                                <h4 className="font-bold text-md text-gray-700 mt-6 mb-2">Detalle de Facturas</h4>
+                                <div className="overflow-y-auto max-h-72 border border-gray-200 rounded-xl shadow-inner">
                                     <table className="min-w-full text-sm">
                                         <thead className="bg-gray-100 sticky top-0"><tr>
-                                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Cliente</th>
-                                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Estado</th>
-                                            <th className="px-4 py-2 text-right font-semibold text-gray-600">Total Factura</th>
-                                            <th className="px-4 py-2 text-right font-semibold text-gray-600">Monto Cobrado</th>
-                                            <th className="px-4 py-2 text-right font-semibold text-gray-600">Saldo Pendiente</th>
+                                            <th className="px-4 py-3 text-left font-semibold text-gray-600">Cliente</th>
+                                            <th className="px-4 py-3 text-left font-semibold text-gray-600">Estado</th>
+                                            <th className="px-4 py-3 text-right font-semibold text-gray-600">Total Factura</th>
+                                            <th className="px-4 py-3 text-right font-semibold text-gray-600">Monto Cobrado</th>
+                                            <th className="px-4 py-3 text-right font-semibold text-gray-600">Saldo Pendiente</th>
                                         </tr></thead>
                                         <tbody className="bg-white">
                                             {currentRouteInvoices.map(inv => (
-                                                <tr key={inv.id} className="border-t hover:bg-gray-50">
+                                                <tr key={inv.id} className="border-t hover:bg-gray-50 transition-colors">
                                                     <td className="px-4 py-3 font-medium text-gray-800">{inv.clienteNombre}</td>
                                                     <td className="px-4 py-3"><span className={getStatusBadge(inv.estado)}>{inv.estado}</span></td>
                                                     <td className="px-4 py-3 text-right">{formatCurrency(inv.totalVenta)}</td>
@@ -306,10 +378,10 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                                     </table>
                                 </div>
                                 <div className="flex justify-between items-center mt-6 border-t pt-4">
-                                    <button onClick={handlePrintSettlement} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-all">
+                                    <button onClick={handlePrintSettlement} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-all shadow-md">
                                         <PrinterIcon /> Imprimir Rendición
                                     </button>
-                                    <button onClick={() => handleArchiveOne(route)} className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-all">
+                                    <button onClick={() => handleArchiveOne(route)} className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-all shadow-md">
                                         <ArchiveIcon className="w-5 h-5" /> Archivar Solo Esta Ruta
                                     </button>
                                 </div>
@@ -322,59 +394,74 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
     );
 };
 
-const RouteCard = ({ route, onOpenPlanner, allInvoices }) => {
-    const { estado, nombre, repartidorNombre, facturas } = route;
+// --- RouteCard MEJORADO ---
+const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
+    const { estado, nombre, repartidorNombre, facturas, fechaCreacion } = route;
     const liveStats = useMemo(() => {
         if (!allInvoices) return { paradasCompletadas: 0, totalParadas: (facturas || []).length, progreso: 0, dineroCobrado: 0, proximaParada: 'N/A' };
         
         const routeInvoiceIds = new Set((facturas || []).map(f => f.id));
         const currentRouteInvoices = allInvoices.filter(inv => routeInvoiceIds.has(inv.id));
         
-        const paradasCompletadas = currentRouteInvoices.filter(inv => inv.estado === 'Pagada' || inv.estado === 'Anulada' || inv.estado === 'Adeuda').length;
+        // --- CORRECCIÓN: Definición de "completada" ---
+        const paradasCompletadas = currentRouteInvoices.filter(inv => inv.estado !== 'Repartiendo' && inv.estado !== 'Pendiente de Entrega').length;
         const totalParadas = currentRouteInvoices.length;
         const progreso = totalParadas > 0 ? (paradasCompletadas / totalParadas) * 100 : 0;
         const dineroCobrado = currentRouteInvoices.reduce((sum, inv) => sum + (inv.pagoEfectivo || 0), 0);
         
         let proximaParada = 'Finalizada';
-        for (const plannedInvoice of (facturas || [])) {
-            const liveInvoice = currentRouteInvoices.find(i => i.id === plannedInvoice.id);
-            if (liveInvoice && liveInvoice.estado === 'Repartiendo') {
-                proximaParada = liveInvoice.clienteNombre;
-                break;
-            }
+        const nextStopInvoice = (facturas || []).find(planned => {
+            const live = currentRouteInvoices.find(i => i.id === planned.id);
+            return live?.estado === 'Repartiendo';
+        });
+        if (nextStopInvoice) {
+            proximaParada = nextStopInvoice.clienteNombre;
+        } else if (estado === 'En Curso' && progreso < 100) {
+             // Encuentra la primera parada que aún no está completada
+             // --- CORRECCIÓN: Buscar 'Pendiente de Entrega' ---
+            const pendingStop = (facturas || []).find(planned => {
+                const live = currentRouteInvoices.find(i => i.id === planned.id);
+                return live?.estado === 'Repartiendo' || live?.estado === 'Pendiente de Entrega';
+            });
+            proximaParada = pendingStop ? pendingStop.clienteNombre : 'Monitorear App';
         }
+
         return { paradasCompletadas, totalParadas, progreso, dineroCobrado, proximaParada };
-    }, [facturas, allInvoices]);
+    }, [facturas, allInvoices, estado]);
 
     const statusInfo = {
-        'Planificada': { color: 'yellow', icon: <EditIcon className="inline-block w-5 h-5" />, text: 'Planificar' },
-        'En Curso': { color: 'blue', icon: <EyeIcon className="inline-block w-5 h-5" />, text: 'Monitorear' },
+        'Planificada': { color: 'yellow', icon: <EditIcon className="inline-block w-5 h-5" />, text: 'Planificar Ruta' },
+        'En Curso': { color: 'blue', icon: <EyeIcon className="inline-block w-5 h-5" />, text: 'Monitorear Ruta' },
         'Completada': { color: 'green', icon: <CheckCircleIcon className="inline-block w-5 h-5" />, text: 'Ver Rendición' },
-        'Adeuda': { color: 'orange', icon: <CheckCircleIcon className="inline-block w-5 h-5" />, text: 'Ver Rendición' },
+        'Adeuda': { color: 'orange', icon: <AlertTriangle className="inline-block w-5 h-5" />, text: 'Ver Rendición' },
+        'Anulada': { color: 'red', icon: <XIcon className="inline-block w-5 h-5" />, text: 'Ver Detalle' },
     };
-    const currentStatus = statusInfo[estado] || { color: 'gray', icon: '?', text: 'Desconocido' };
+    const currentStatus = statusInfo[estado] || { color: 'gray', icon: '?', text: 'Abrir Detalle' };
 
     return (
-        <div className="bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 flex flex-col animate-fade-in hover:-translate-y-1">
-            <div className="p-5">
+        <div className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col animate-fade-in hover:-translate-y-1 border-t-8" style={{borderColor: `var(--color-${currentStatus.color}-500, #4f46e5)`}}>
+            <div className="p-5 flex-grow">
                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-${currentStatus.color}-100 text-${currentStatus.color}-800 mb-3`}>
                     <TruckIcon className="w-4 h-4" /> {estado}
                 </div>
                 <h3 className="text-xl font-bold text-gray-800 truncate">{nombre}</h3>
-                <p className="text-sm text-gray-500 h-5">{repartidorNombre || 'Sin repartidor asignado'}</p>
-                {estado === 'En Curso' && (
+                <p className="text-sm text-gray-500 h-5 mt-1">Repartidor: <span className='font-semibold'>{repartidorNombre || 'Sin asignar'}</span></p>
+                <p className="text-xs text-gray-400 mt-1">Creada el: {fechaCreacion.toLocaleDateString('es-AR')}</p>
+
+                {(estado === 'En Curso' || estado === 'Completada' || estado === 'Adeuda') && (
                     <div className="mt-4 space-y-2 text-sm text-gray-700 border-t pt-3">
                         <p><strong>Dinero Cobrado:</strong> <span className="font-bold text-green-600">{formatCurrency(liveStats.dineroCobrado)}</span></p>
-                        <p className="truncate"><strong>Próxima Parada:</strong> <span className="font-semibold">{liveStats.proximaParada}</span></p>
+                        <p className="truncate"><strong>Próxima/Última Parada:</strong> <span className="font-semibold text-indigo-600">{liveStats.proximaParada}</span></p>
                     </div>
                 )}
+                
                 <div className="mt-4">
                     <div className="flex justify-between text-sm font-medium text-gray-600">
                         <span>Progreso</span>
                         <span>{liveStats.paradasCompletadas} / {liveStats.totalParadas} paradas</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-                        <div className={`bg-${currentStatus.color}-500 h-2.5 rounded-full transition-all duration-500`} style={{ width: `${liveStats.progreso}%` }}></div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1 overflow-hidden">
+                        <div className={`bg-${currentStatus.color}-600 h-2.5 rounded-full transition-all duration-500`} style={{ width: `${liveStats.progreso}%` }}></div>
                     </div>
                 </div>
             </div>
@@ -387,12 +474,22 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices }) => {
     );
 };
 
-const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas }) => {
-    const isReadOnly = route.estado === 'En Curso';
+
+// --- RoutePlanner MEJORADO con Reordenamiento y Cancelación ---
+const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, onCancelRoute }) => {
+    const isReadOnly = route.estado === 'En Curso' || route.estado === 'Completada' || route.estado === 'Adeuda' || route.estado === 'Anulada';
+    const canCancel = route.estado === 'Planificada' || route.estado === 'En Curso';
     const [stagedInvoices, setStagedInvoices] = useState(route.facturas || []);
     const [assignedRepartidor, setAssignedRepartidor] = useState(route.repartidorId || '');
     const [selectedZone, setSelectedZone] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    // Si la ruta está en curso o completada, cargamos el nombre del repartidor asignado para mostrarlo en el footer
+    useEffect(() => {
+        if (isReadOnly && route.repartidorId) {
+            setAssignedRepartidor(route.repartidorId);
+        }
+    }, [isReadOnly, route.repartidorId]);
 
     const filteredPendingInvoices = useMemo(() => {
         return pendingInvoices.filter(invoice => {
@@ -408,8 +505,26 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas }) 
         return { totalFacturas, totalACobrar };
     }, [stagedInvoices]);
     
-    const addInvoiceToRoute = (invoice) => { if (!isReadOnly && !stagedInvoices.some(i => i.id === invoice.id)) { setStagedInvoices(prev => [...prev, invoice]); }};
-    const removeInvoiceFromRoute = (invoiceId) => { if (!isReadOnly) setStagedInvoices(prev => prev.filter(inv => inv.id !== invoiceId)); };
+    const addInvoiceToRoute = (invoice) => { 
+        if (!isReadOnly && !stagedInvoices.some(i => i.id === invoice.id)) { 
+            setStagedInvoices(prev => [...prev, invoice]); 
+        }
+    };
+    const removeInvoiceFromRoute = (invoiceId) => { 
+        if (!isReadOnly) setStagedInvoices(prev => prev.filter(inv => inv.id !== invoiceId)); 
+    };
+
+    // --- NUEVA LÓGICA DE REORDENAMIENTO ---
+    const moveInvoice = (index, direction) => {
+        if (isReadOnly) return;
+        const newIndex = index + direction;
+        if (newIndex >= 0 && newIndex < stagedInvoices.length) {
+            const newStaged = [...stagedInvoices];
+            [newStaged[index], newStaged[newIndex]] = [newStaged[newIndex], newStaged[index]];
+            setStagedInvoices(newStaged);
+        }
+    };
+    // ------------------------------------
 
     const handleSaveAndDispatch = async () => {
         if (isReadOnly) return;
@@ -426,16 +541,25 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas }) 
                     throw new Error("La ruta ya fue modificada o despachada por otro usuario.");
                 }
 
-                const facturasParaRuta = stagedInvoices.map(inv => ({
-                    id: inv.id, clienteId: inv.clienteId, clienteNombre: inv.clienteNombre,
-                    clienteDireccion: inv.clienteDireccion, totalVenta: inv.totalVenta,
-                    items: inv.items, estadoVisita: 'Pendiente',
-                }));
+                // Aseguramos que los datos de las facturas estén actualizados y en el orden actual del planner
+                const facturasParaRuta = stagedInvoices.map(inv => {
+                    const fullInvoiceData = pendingInvoices.find(p => p.id === inv.id) || inv;
+                    return {
+                        id: fullInvoiceData.id, 
+                        clienteId: fullInvoiceData.clienteId, 
+                        clienteNombre: fullInvoiceData.clienteNombre,
+                        clienteDireccion: fullInvoiceData.clienteDireccion, 
+                        totalVenta: fullInvoiceData.totalVenta,
+                        items: fullInvoiceData.items, 
+                        estadoVisita: 'Pendiente', // Estado inicial para el repartidor
+                    };
+                });
 
                 transaction.update(routeRef, {
                     estado: 'En Curso', repartidorId: assignedRepartidor,
                     repartidorNombre: repartidor?.nombreCompleto || 'N/A',
-                    facturas: facturasParaRuta, resumen: routeSummary,
+                    facturas: facturasParaRuta, // Usamos la lista reordenada
+                    resumen: routeSummary,
                 });
                 
                 stagedInvoices.forEach(invoice => {
@@ -456,79 +580,114 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas }) 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 animate-fade-in-scale">
-            <div className="bg-gray-100 w-11/12 h-5/6 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-                <header className="p-4 bg-white border-b flex justify-between items-center flex-shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 animate-fade-in">
+            <div className="bg-gray-100 w-11/12 max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-scale">
+                <header className="p-5 bg-white border-b flex justify-between items-center flex-shrink-0">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800">{route.nombre}</h2>
-                        {isReadOnly && <p className="text-sm font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full inline-block mt-1">MONITOREO EN VIVO (SOLO LECTURA)</p>}
+                        <h2 className="text-3xl font-bold text-gray-800">{route.nombre}</h2>
+                        <span className={`text-sm font-semibold px-2 py-0.5 rounded-full inline-block mt-1 ${getStatusBadge(route.estado)}`}>{route.estado}</span>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><XIcon /></button>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-red-100 text-gray-700 hover:text-red-600 transition-colors"><XIcon /></button>
                 </header>
                 <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
-                    <div className={`w-full md:w-1/2 border-r bg-white p-4 flex flex-col ${isReadOnly ? 'hidden' : ''}`}>
-                        <div className="mb-4 flex-shrink-0">
-                            <label className="text-sm font-bold text-gray-600 mb-2 block">Filtrar por Zona:</label>
-                            <select value={selectedZone} onChange={e => setSelectedZone(e.target.value)} className="w-full p-2 border-gray-300 rounded-md shadow-sm">
-                                <option value="">Todas las Zonas</option>
-                                {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
-                            </select>
-                        </div>
-                        <h3 className="font-bold text-lg mb-2 flex-shrink-0">Facturas Pendientes</h3>
-                        <div className="overflow-y-auto flex-grow">
-                            {filteredPendingInvoices.map(invoice => (
-                                <button key={invoice.id} onClick={() => addInvoiceToRoute(invoice)} className="w-full mb-2 p-3 border rounded-md text-left hover:bg-indigo-50 hover:border-indigo-300 flex justify-between items-center transition-colors shadow-sm">
-                                    <div>
-                                        <p className="font-semibold text-gray-800">{invoice.clienteNombre}</p>
-                                        <p className="text-sm text-gray-600">{invoice.clienteDireccion}</p>
-                                        <p className="font-bold text-sm text-indigo-600 mt-1">{formatCurrency(invoice.totalVenta)}</p>
-                                    </div>
-                                    <PlusIcon className="text-indigo-500" />
-                                </button>
-                            ))}
-                            {filteredPendingInvoices.length === 0 && <p className="text-gray-500 text-sm mt-4 italic">No hay facturas pendientes en esta zona.</p>}
-                        </div>
-                    </div>
-                    <div className={`w-full ${!isReadOnly ? 'md:w-1/2' : ''} p-4 flex flex-col`}>
-                        <div className="bg-white rounded-lg shadow p-4 flex-grow flex flex-col">
-                            <h4 className="font-bold text-lg mb-2 text-gray-700 flex-shrink-0">Paradas en esta Ruta ({stagedInvoices.length})</h4>
-                            <div className="flex-grow overflow-y-auto bg-gray-50 rounded-md p-2">
-                                {stagedInvoices.length === 0 && <p className="text-center text-gray-500 mt-8 italic">Añade facturas a la ruta.</p>}
-                                {stagedInvoices.map((invoice, index) => (
-                                    <div key={invoice.id} className="flex items-center justify-between p-3 border-b bg-white rounded-md mb-2 shadow-sm">
-                                        <div className="flex items-center">
-                                            <span className="text-indigo-600 font-bold mr-3">{index + 1}.</span>
-                                            <div>
-                                                <p className="font-semibold text-gray-800">{invoice.clienteNombre}</p>
-                                                <p className="text-xs text-gray-500">{invoice.clienteDireccion}</p>
-                                            </div>
+                    {/* Columna de Facturas Pendientes (Solo Planificación) */}
+                    {!isReadOnly && (
+                        <div className="w-full md:w-1/3 border-r bg-white p-4 flex flex-col">
+                            <h3 className="text-xl font-bold text-gray-700 mb-4 flex-shrink-0">
+                                Facturas Pendientes ({filteredPendingInvoices.length})
+                            </h3>
+                            <div className="mb-4 flex-shrink-0">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Zona:</label>
+                                <select value={selectedZone} onChange={e => setSelectedZone(e.target.value)} className="w-full p-2 border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500">
+                                    <option value="">Todas las Zonas</option>
+                                    {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+                                </select>
+                            </div>
+                            <div className="overflow-y-auto flex-grow space-y-3 pr-2">
+                                {filteredPendingInvoices.map(invoice => (
+                                    <button key={invoice.id} onClick={() => addInvoiceToRoute(invoice)} className="w-full p-3 border border-gray-200 bg-white rounded-xl text-left hover:bg-indigo-50 hover:border-indigo-400 transition-all shadow-md flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-gray-800 truncate">{invoice.clienteNombre}</p>
+                                            <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
                                         </div>
-                                        {!isReadOnly && <button onClick={() => removeInvoiceFromRoute(invoice.id)} className="text-red-500 hover:text-red-700 p-1"><XIcon width={16} height={16} /></button>}
-                                        {isReadOnly && <span className={getStatusBadge(invoice.estadoVisita || 'Pendiente')}>{invoice.estadoVisita || 'Pendiente'}</span>}
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="font-bold text-base text-indigo-600">{formatCurrency(invoice.totalVenta)}</p>
+                                            <PlusIcon className="text-indigo-500 w-4 h-4 mt-1" />
+                                        </div>
+                                    </button>
+                                ))}
+                                {filteredPendingInvoices.length === 0 && <p className="text-gray-500 text-sm mt-4 italic text-center">No hay facturas pendientes en esta zona.</p>}
+                            </div>
+                        </div>
+                    )}
+                    {/* Columna de Paradas en Ruta (Planificación / Monitoreo) */}
+                    <div className={`w-full ${!isReadOnly ? 'md:w-2/3' : 'md:w-full'} p-4 flex flex-col`}>
+                        <div className="bg-white rounded-xl shadow-lg p-4 flex-grow flex flex-col">
+                            <h4 className="font-bold text-xl mb-4 text-gray-700 flex-shrink-0 border-b pb-2">
+                                Lista de Paradas ({stagedInvoices.length})
+                            </h4>
+                            <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-3 space-y-3">
+                                {stagedInvoices.length === 0 && <p className="text-center text-gray-500 mt-8 italic">Añade facturas para planificar la ruta.</p>}
+                                {stagedInvoices.map((invoice, index) => (
+                                    <div key={invoice.id} className="flex items-center p-3 border border-gray-100 bg-white rounded-lg shadow-sm transition-shadow hover:shadow-md">
+                                        <span className="text-2xl font-extrabold text-indigo-600 mr-4 w-8 flex-shrink-0 text-center">{index + 1}</span>
+                                        <div className="flex-grow">
+                                            <p className="font-semibold text-gray-800">{invoice.clienteNombre}</p>
+                                            <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
+                                        </div>
+                                        <div className="text-right flex items-center gap-2 flex-shrink-0">
+                                            {isReadOnly && <span className={getStatusBadge(invoice.estadoVisita || 'Pendiente')}>{invoice.estadoVisita || 'Pendiente'}</span>}
+                                            <span className="font-bold text-gray-700 ml-2">{formatCurrency(invoice.totalVenta)}</span>
+                                            
+                                            {/* Controles de Reordenamiento (Solo Planificación) */}
+                                            {!isReadOnly && (
+                                                <div className="flex flex-col ml-3">
+                                                    <button onClick={() => moveInvoice(index, -1)} disabled={index === 0} className="p-0.5 text-indigo-500 hover:text-indigo-700 disabled:text-gray-300 transition-colors"><ArrowUpIcon /></button>
+                                                    <button onClick={() => moveInvoice(index, 1)} disabled={index === stagedInvoices.length - 1} className="p-0.5 text-indigo-500 hover:text-indigo-700 disabled:text-gray-300 transition-colors"><ArrowDownIcon /></button>
+                                                </div>
+                                            )}
+
+                                            {/* Botón de Eliminar (Solo Planificación) */}
+                                            {!isReadOnly && (
+                                                <button onClick={() => removeInvoiceFromRoute(invoice.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors ml-2"><XIcon width={16} height={16} /></button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
                 </div>
-                <footer className="p-4 bg-white border-t flex justify-between items-center flex-shrink-0">
+                <footer className="p-5 bg-white border-t flex justify-between items-center flex-shrink-0">
                     <div className="flex items-center gap-6">
-                        <div className={`${isReadOnly ? 'hidden' : ''}`}>
-                            <label className="mr-2 font-semibold text-gray-700">Asignar a:</label>
-                            <select value={assignedRepartidor} onChange={(e) => setAssignedRepartidor(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" disabled={isReadOnly}>
+                        <div className="flex items-center">
+                            <label className="mr-3 font-semibold text-gray-700">Asignar a:</label>
+                            <select value={assignedRepartidor} onChange={(e) => setAssignedRepartidor(e.target.value)} className="border-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2" disabled={isReadOnly}>
                                 <option value="" disabled>Seleccionar repartidor...</option>
                                 {repartidores.map(r => <option key={r.id} value={r.id}>{r.nombreCompleto}</option>)}
                             </select>
                         </div>
-                         <div className="font-semibold text-gray-700">Paradas: <span className="font-bold text-xl text-indigo-600">{routeSummary.totalFacturas}</span></div>
-                        <div className="font-semibold text-gray-700">Total a Cobrar: <span className="font-bold text-xl text-indigo-600">{formatCurrency(routeSummary.totalACobrar)}</span></div>
+                         <div className="font-semibold text-gray-700 border-l pl-4">Paradas: <span className="font-bold text-2xl text-indigo-600">{routeSummary.totalFacturas}</span></div>
+                        <div className="font-semibold text-gray-700 border-l pl-4">Total a Cobrar: <span className="font-bold text-2xl text-indigo-600">{formatCurrency(routeSummary.totalACobrar)}</span></div>
                     </div>
-                    {!isReadOnly && <button onClick={handleSaveAndDispatch} className="flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition-all disabled:bg-gray-400" disabled={!assignedRepartidor || stagedInvoices.length === 0 || isSaving}>
-                        {isSaving ? 'Despachando...' : <><TruckIcon />Guardar y Despachar</>}
-                    </button>}
-                    {isReadOnly && <button onClick={onClose} className="flex items-center gap-2 px-5 py-3 bg-gray-600 text-white font-bold rounded-lg shadow-lg hover:bg-gray-700 transition-all">
-                        Cerrar Monitor
-                    </button>}
+                    
+                    <div className="flex items-center gap-3">
+                        {canCancel && (
+                            <button onClick={() => onCancelRoute(route)} className="flex items-center gap-2 px-5 py-3 bg-red-100 text-red-600 font-bold rounded-xl shadow-md hover:bg-red-200 transition-all">
+                                <XIcon className="w-5 h-5"/> Anular Ruta
+                            </button>
+                        )}
+                        {!isReadOnly && (
+                            <button onClick={handleSaveAndDispatch} className="flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all disabled:bg-gray-400 transform hover:scale-[1.02]" disabled={!assignedRepartidor || stagedInvoices.length === 0 || isSaving}>
+                                {isSaving ? 'Despachando...' : <><TruckIcon />Guardar y Despachar</>}
+                            </button>
+                        )}
+                        {isReadOnly && (
+                            <button onClick={onClose} className="flex items-center gap-2 px-5 py-3 bg-gray-600 text-white font-bold rounded-xl shadow-lg hover:bg-gray-700 transition-all">
+                                Cerrar Monitor
+                            </button>
+                        )}
+                    </div>
                 </footer>
             </div>
         </div>

@@ -26,7 +26,7 @@ const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocal
 // --- Componente Principal ---
 const ReporteGeneral = () => {
     const [ventas, setVentas] = useState([]);
-    const [gastos, setGastos] = useState([]); // <--- NUEVO ESTADO PARA GASTOS
+    const [gastos, setGastos] = useState([]); 
     const [error, setError] = useState(null);
     const [period, setPeriod] = useState('Diario'); 
     const [startDate, setStartDate] = useState('');
@@ -43,7 +43,7 @@ const ReporteGeneral = () => {
             })));
         }, (err) => { console.error("Error cargando ventas:", err); setError("Error al cargar datos de ventas."); });
 
-        // --- NUEVO LISTENER PARA GASTOS ---
+        // --- LISTENER PARA GASTOS ---
         const unsubscribeGastos = onSnapshot(query(collection(db, 'gastos'), orderBy('fechaGasto', 'desc')), (snapshot) => {
             setGastos(snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -59,7 +59,7 @@ const ReporteGeneral = () => {
     }, []);
 
 
-    // --- Lógica de Agregación y Cálculo Gerencial (ACTUALIZADA) ---
+    // --- Lógica de Agregación y Cálculo Gerencial (ACTUALIZADA con Margen Bruto) ---
     const reportMetrics = useMemo(() => {
         let filteredVentas = ventas.filter(v => v.estado !== RENDER_STATUS.ANULADA); 
         let filteredGastos = gastos;
@@ -70,12 +70,12 @@ const ReporteGeneral = () => {
         if (start) {
             start.setHours(0, 0, 0, 0);
             filteredVentas = filteredVentas.filter(v => v.fecha >= start);
-            filteredGastos = filteredGastos.filter(g => g.fecha >= start); // Filtramos gastos también
+            filteredGastos = filteredGastos.filter(g => g.fecha >= start); 
         }
         if (end) {
             end.setHours(23, 59, 59, 999);
             filteredVentas = filteredVentas.filter(v => v.fecha <= end);
-            filteredGastos = filteredGastos.filter(g => g.fecha <= end); // Filtramos gastos también
+            filteredGastos = filteredGastos.filter(g => g.fecha <= end); 
         }
         
         const totalVenta = filteredVentas.reduce((sum, v) => sum + (v.totalVenta || 0), 0);
@@ -83,12 +83,16 @@ const ReporteGeneral = () => {
         const totalSaldoPendiente = filteredVentas.reduce((sum, v) => sum + (v.saldoPendiente || 0), 0);
         const totalGastos = filteredGastos.reduce((sum, g) => sum + (g.monto || 0), 0);
 
-        // La ganancia neta ahora considera los gastos operacionales del período.
-        const totalNetProfit = totalVenta - totalCosto - totalGastos;
+        // NUEVO: Margen Bruto (Venta Bruta - Costo de Mercadería)
+        const totalGrossProfit = totalVenta - totalCosto;
+
+        // La ganancia neta (resultado final)
+        const totalNetProfit = totalGrossProfit - totalGastos;
         
         return {
             totalVenta,
             totalCosto,
+            totalGrossProfit, // <-- AÑADIDO
             totalNetProfit,
             totalGastos,
             totalSaldoPendiente,
@@ -99,7 +103,8 @@ const ReporteGeneral = () => {
     
     // --- Lógica de Impresión de Resumen (ACTUALIZADA) ---
     const handlePrintSummary = () => {
-        const { totalVenta, totalNetProfit, totalSaldoPendiente, totalCosto, totalGastos } = reportMetrics;
+        // Se extrae totalGrossProfit de reportMetrics
+        const { totalVenta, totalNetProfit, totalSaldoPendiente, totalCosto, totalGastos, totalGrossProfit } = reportMetrics; 
         const dateRange = startDate && endDate 
             ? `Del ${new Date(startDate).toLocaleDateString('es-AR', {timeZone: 'UTC'})} al ${new Date(endDate).toLocaleDateString('es-AR', {timeZone: 'UTC'})}` 
             : 'Acumulado Total';
@@ -128,6 +133,10 @@ const ReporteGeneral = () => {
                         <span>-${formatCurrency(totalCosto)}</span>
                     </div>
                     <div class="metric" style="border-bottom: 2px solid #bbb;">
+                        <span class="highlight" style="color: #4B5563;">MARGEN BRUTO (Venta - Costo)</span>
+                        <span class="highlight">${formatCurrency(totalGrossProfit)}</span>
+                    </div>
+                    <div class="metric" style="border-top: 1px dashed #ccc;">
                         <span>(-) GASTOS OPERACIONALES</span>
                         <span>-${formatCurrency(totalGastos)}</span>
                     </div>
@@ -199,10 +208,12 @@ const ReporteGeneral = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
                 <KPICard title="Venta Total Bruta" value={reportMetrics.totalVenta} icon={DollarSign} color="blue" delay={0}/>
-                <KPICard title="Gastos Operacionales" value={reportMetrics.totalGastos} icon={TrendingDown} color="orange" delay={1} />
-                <KPICard title="Ganancia Neta (Final)" value={reportMetrics.totalNetProfit} icon={TrendingUp} color="green" delay={2} />
-                <KPICard title="Deuda Global (Pendiente)" value={reportMetrics.totalSaldoPendiente} icon={AlertCircle} color="red" delay={3}/>
-                <KPICard title="Costo de Mercadería" value={reportMetrics.totalCosto} icon={DollarSign} color="gray" delay={4}/>
+                <KPICard title="Costo de Mercadería" value={reportMetrics.totalCosto} icon={DollarSign} color="gray" delay={1}/>
+                {/* NUEVA TARJETA: Margen Bruto */}
+                <KPICard title="Ganancia Bruta (Venta-Costo)" value={reportMetrics.totalGrossProfit} icon={TrendingUp} color="yellow" delay={2} /> 
+                <KPICard title="Gastos Operacionales" value={reportMetrics.totalGastos} icon={TrendingDown} color="orange" delay={3} />
+                <KPICard title="Ganancia Neta (Final)" value={reportMetrics.totalNetProfit} icon={TrendingUp} color="green" delay={4} />
+                <KPICard title="Deuda Global (Pendiente)" value={reportMetrics.totalSaldoPendiente} icon={AlertCircle} color="red" delay={5}/>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
@@ -221,7 +232,7 @@ const ReporteGeneral = () => {
                                     <th className="px-6 py-3 font-semibold text-center text-gray-600 uppercase">Estado</th>
                                     <th className="px-6 py-3 font-semibold text-right text-gray-600 uppercase">Venta Total</th>
                                     <th className="px-6 py-3 font-semibold text-right text-red-600 uppercase">Saldo Pendiente</th>
-                                    <th className="px-6 py-3 font-semibold text-right text-green-600 uppercase">Ganancia Neta (Venta-Costo)</th>
+                                    <th className="px-6 py-3 font-semibold text-right text-green-600 uppercase">Ganancia Bruta (Venta-Costo)</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
