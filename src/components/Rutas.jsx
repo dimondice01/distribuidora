@@ -19,17 +19,27 @@ const AlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/s
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
-// ... (Las funciones generateLoadingReportHTML, generateSettlementReportHTML, y printHTML quedan igual) ...
-
+// --- CORRECCIÓN PDF (ID de Producto) ---
+// (Esta es la corrección de la que hablamos en el chat anterior, 
+// usando el nombre como fallback si el productId es undefined)
 const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     const productSummary = new Map();
     invoices.forEach(invoice => {
         (invoice.items || []).forEach(item => {
-            const existing = productSummary.get(item.productId);
+            // Usamos el 'productId' si existe, si no (si es undefined o null), 
+            // usamos el 'nombre' del producto como clave única.
+            const key = item.productId || item.nombre; 
+
+            if (!key) {
+                console.warn("Item sin clave (productId o nombre) encontrado:", item);
+                return; // Saltar este item
+            }
+
+            const existing = productSummary.get(key);
             if (existing) {
                 existing.quantity += item.quantity;
             } else {
-                productSummary.set(item.productId, { nombre: item.nombre, quantity: item.quantity });
+                productSummary.set(key, { nombre: item.nombre, quantity: item.quantity });
             }
         });
     });
@@ -37,6 +47,9 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     const itemsRows = productList.map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
     return `<html><head><title>Reporte de Carga - ${routeName}</title><style>body{font-family: Arial, sans-serif; margin: 20px;} h1, h2, h3 {color: #333;} table{width: 100%; border-collapse: collapse; margin-top: 20px;} th, td{padding: 12px; text-align: left;} thead{background-color: #f2f2f2;}</style></head><body><h1>Reporte de Carga para Depósito</h1><h2>Ruta: ${routeName}</h2><h3>Repartidor: ${repartidorNombre}</h3><p>Fecha de Emisión: ${new Date().toLocaleString('es-AR')}</p><hr/><table><thead><tr><th style="width:150px;">Cantidad a Cargar</th><th>Producto</th></tr></thead><tbody>${itemsRows}</tbody></table></body></html>`;
 };
+// --- FIN CORRECCIÓN PDF ---
+
+
 const generateSettlementReportHTML = (route, invoices) => {
     const resumenCobros = invoices.reduce((acc, fac) => {
         acc.efectivo += fac.pagoEfectivo || 0;
@@ -49,8 +62,10 @@ const generateSettlementReportHTML = (route, invoices) => {
     const devolucionesSummary = new Map();
     devoluciones.forEach(invoice => {
         (invoice.items || []).forEach(item => {
-            const existing = devolucionesSummary.get(item.productId);
-            if (existing) { existing.quantity += item.quantity; } else { devolucionesSummary.set(item.productId, { nombre: item.nombre, quantity: item.quantity }); }
+            const key = item.productId || item.nombre; // Usar nombre como fallback
+            if (!key) return;
+            const existing = devolucionesSummary.get(key);
+            if (existing) { existing.quantity += item.quantity; } else { devolucionesSummary.set(key, { nombre: item.nombre, quantity: item.quantity }); }
         });
     });
     const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
@@ -114,9 +129,7 @@ function Rutas() {
         });
     }, [allInvoices, clientes]);
 
-    // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
     const pendingInvoices = useMemo(() => enrichedInvoices.filter(inv => inv.estado === 'Pendiente de Entrega'), [enrichedInvoices]);
-    // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
     
     const handleCreateNewRoute = async () => {
         const today = new Date();
@@ -137,7 +150,6 @@ function Rutas() {
     const handleOpenPlanner = (route) => { setSelectedRoute(route); setIsPlannerOpen(true); };
     const handleClosePlanner = () => { setIsPlannerOpen(false); setSelectedRoute(null); };
     
-    // --- LÓGICA DE CANCELACIÓN (NUEVO) ---
     const handleCancelRoute = async (routeToCancel) => {
         if (!window.confirm(`¿Estás seguro de anular la ruta "${routeToCancel.nombre}"? Esto devolverá todas las facturas a 'Pendiente de Entrega'.`)) return;
 
@@ -145,25 +157,18 @@ function Rutas() {
             await runTransaction(db, async (transaction) => {
                 const routeRef = doc(db, 'rutas', routeToCancel.id);
 
-                // 1. Actualizar estado de la ruta a Anulada
                 transaction.update(routeRef, {
                     estado: 'Anulada',
                     fechaAnulacion: Timestamp.now(),
                     resumen: { ...routeToCancel.resumen, estadoFinal: 'Anulada' }
                 });
 
-                // 2. Devolver el estado de las facturas a Pendiente de Entrega
                 for (const facturaRef of (routeToCancel.facturas || [])) {
                     const invoiceRef = doc(db, 'ventas', facturaRef.id);
-                    // Solo revertimos facturas que están 'Repartiendo' (para evitar tocar facturas que ya rindieron)
-                    // En este punto, solo las 'Planificada' y 'En Curso' deberían tener facturas 'Repartiendo'.
-                    
-                    // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
                     transaction.update(invoiceRef, { 
-                        estado: 'Pendiente de Entrega', // <- Corregido
-                        rutaId: null // Limpiamos la referencia a la ruta.
+                        estado: 'Pendiente de Entrega', 
+                        rutaId: null 
                     });
-                    // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
                 }
             });
             alert(`Ruta "${routeToCancel.nombre}" ha sido ANULADA y sus facturas liberadas.`);
@@ -173,7 +178,6 @@ function Rutas() {
             alert("Error al anular la ruta: " + error.message);
         }
     };
-    // ------------------------------------
 
     if (routesLoading || invoicesLoading || repartidoresLoading || clientesLoading || zonasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
@@ -182,7 +186,7 @@ function Rutas() {
     const planificadas = routes.filter(r => r.estado === 'Planificada');
     const enCurso = routes.filter(r => r.estado === 'En Curso');
     const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda');
-    const anuladas = routes.filter(r => r.estado === 'Anulada'); // Nuevo estado para control
+    const anuladas = routes.filter(r => r.estado === 'Anulada'); 
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
@@ -213,16 +217,19 @@ function Rutas() {
             {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} />}
             {activeTab === 'anuladas' && <RouteList routes={anuladas} onOpenPlanner={handleOpenPlanner} title="Rutas Anuladas (Histórico)" allInvoices={enrichedInvoices} readOnly={true} />}
 
+            {/* --- Esta sección contiene la corrección (1/3) --- */}
             {isPlannerOpen && (
                 <RoutePlanner 
                     route={selectedRoute} 
                     onClose={handleClosePlanner} 
                     pendingInvoices={pendingInvoices} 
+                    allEnrichedInvoices={enrichedInvoices}
                     repartidores={repartidores} 
                     zonas={zonas} 
-                    onCancelRoute={handleCancelRoute} // Pasamos la nueva función
+                    onCancelRoute={handleCancelRoute}
                 />
             )}
+
         </div>
     );
 }
@@ -251,16 +258,13 @@ const getStatusBadge = (estado) => {
         'Completada': "bg-green-100 text-green-800", 'Adeuda': "bg-orange-100 text-orange-800",
         'Anulada': "bg-red-100 text-red-800", 'Repartiendo': "bg-blue-100 text-blue-800",
         'Pagada': "bg-green-100 text-green-800", 
-        // --- ¡¡¡INICIO DE LA CORRECCIÓN!!! ---
-        'Pendiente de Entrega': "bg-yellow-100 text-yellow-800", // <- Corregido (usamos amarillo)
-        // --- ¡¡¡FIN DE LA CORRECCIÓN!!! ---
+        'Pendiente de Entrega': "bg-yellow-100 text-yellow-800", 
         'Anulada (Visita)': "bg-red-100 text-red-800",
     };
     return `${base} ${colors[estado] || "bg-gray-100 text-gray-800"}`;
 };
 
 const TabContentRendicion = ({ routes, allInvoices }) => {
-    // ... (Lógica interna igual, pero con el diseño actualizado) ...
     const [expandedRouteId, setExpandedRouteId] = useState(null);
 
     const resumenCajaDiaria = useMemo(() => {
@@ -300,7 +304,6 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
 
     return (
         <div className="animate-fade-in space-y-6">
-            {/* Panel de Resumen de Caja Diaria Rediseñado (Más Moderno) */}
             <div className="bg-white p-6 rounded-xl shadow-2xl border-l-8 border-indigo-600">
                 <div className="flex flex-wrap justify-between items-center gap-4 border-b pb-4 mb-4">
                     <h2 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2"><TruckIcon/> Rendición de Caja del Día</h2>
@@ -394,7 +397,6 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
     );
 };
 
-// --- RouteCard MEJORADO ---
 const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
     const { estado, nombre, repartidorNombre, facturas, fechaCreacion } = route;
     const liveStats = useMemo(() => {
@@ -403,7 +405,6 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
         const routeInvoiceIds = new Set((facturas || []).map(f => f.id));
         const currentRouteInvoices = allInvoices.filter(inv => routeInvoiceIds.has(inv.id));
         
-        // --- CORRECCIÓN: Definición de "completada" ---
         const paradasCompletadas = currentRouteInvoices.filter(inv => inv.estado !== 'Repartiendo' && inv.estado !== 'Pendiente de Entrega').length;
         const totalParadas = currentRouteInvoices.length;
         const progreso = totalParadas > 0 ? (paradasCompletadas / totalParadas) * 100 : 0;
@@ -417,8 +418,6 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
         if (nextStopInvoice) {
             proximaParada = nextStopInvoice.clienteNombre;
         } else if (estado === 'En Curso' && progreso < 100) {
-             // Encuentra la primera parada que aún no está completada
-             // --- CORRECCIÓN: Buscar 'Pendiente de Entrega' ---
             const pendingStop = (facturas || []).find(planned => {
                 const live = currentRouteInvoices.find(i => i.id === planned.id);
                 return live?.estado === 'Repartiendo' || live?.estado === 'Pendiente de Entrega';
@@ -475,8 +474,9 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
 };
 
 
-// --- RoutePlanner MEJORADO con Reordenamiento y Cancelación ---
-const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, onCancelRoute }) => {
+// --- Esta sección contiene la corrección (2/3) ---
+const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, onCancelRoute, allEnrichedInvoices }) => {
+
     const isReadOnly = route.estado === 'En Curso' || route.estado === 'Completada' || route.estado === 'Adeuda' || route.estado === 'Anulada';
     const canCancel = route.estado === 'Planificada' || route.estado === 'En Curso';
     const [stagedInvoices, setStagedInvoices] = useState(route.facturas || []);
@@ -484,7 +484,6 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
     const [selectedZone, setSelectedZone] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
-    // Si la ruta está en curso o completada, cargamos el nombre del repartidor asignado para mostrarlo en el footer
     useEffect(() => {
         if (isReadOnly && route.repartidorId) {
             setAssignedRepartidor(route.repartidorId);
@@ -514,18 +513,33 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
         if (!isReadOnly) setStagedInvoices(prev => prev.filter(inv => inv.id !== invoiceId)); 
     };
 
-    // --- NUEVA LÓGICA DE REORDENAMIENTO ---
-    const moveInvoice = (index, direction) => {
-        if (isReadOnly) return;
-        const newIndex = index + direction;
-        if (newIndex >= 0 && newIndex < stagedInvoices.length) {
-            const newStaged = [...stagedInvoices];
-            [newStaged[index], newStaged[newIndex]] = [newStaged[newIndex], newStaged[index]];
-            setStagedInvoices(newStaged);
-        }
-    };
-    // ------------------------------------
+    // --- ¡¡¡INICIO DE LA CORRECCIÓN DE ORDENAMIENTO (NUEVO)!!! ---
+    
+    // 1. Ya no necesitamos la función moveInvoice (la borramos)
+    
+    // 2. Creamos una lista 'memoizada' que SIEMPRE estará ordenada por fecha
+    const sortedStagedInvoices = useMemo(() => {
+        // Rehidratamos la lista con los datos completos (para tener las fechas como Objetos Date)
+        const hydratedList = stagedInvoices.map(inv => {
+            return allEnrichedInvoices.find(fullInv => fullInv.id === inv.id) || inv;
+        });
 
+        // Ordenamos la lista
+        hydratedList.sort((a, b) => {
+            // Usamos fechaCreacion o fecha (la que exista) y un fallback por si acaso
+            const dateA = a.fechaCreacion || a.fecha || new Date(0);
+            const dateB = b.fechaCreacion || b.fecha || new Date(0);
+            // Comparamos los timestamps para ordenar de más antiguo a más nuevo
+            return dateA.getTime() - dateB.getTime();
+        });
+
+        return hydratedList;
+    }, [stagedInvoices, allEnrichedInvoices]);
+    
+    // --- ¡¡¡FIN DE LA CORRECCIÓN DE ORDENAMIENTO (NUEVO)!!! ---
+
+
+    // --- Esta sección contiene la corrección (3/3) ---
     const handleSaveAndDispatch = async () => {
         if (isReadOnly) return;
         if (!assignedRepartidor || stagedInvoices.length === 0) { alert("Selecciona facturas y un repartidor."); return; }
@@ -533,6 +547,22 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
         setIsSaving(true);
         const repartidor = repartidores.find(r => r.id === assignedRepartidor);
 
+        // 1. AHORA usamos la lista 'sortedStagedInvoices' que ya está ordenada y rehidratada
+        const facturasCompletasParaRuta = sortedStagedInvoices.map(inv => {
+            // Los datos ya vienen completos desde sortedStagedInvoices, 
+            // pero nos aseguramos de tener el formato correcto para guardar.
+            return {
+                id: inv.id, 
+                clienteId: inv.clienteId, 
+                clienteNombre: inv.clienteNombre,
+                clienteDireccion: inv.clienteDireccion, 
+                totalVenta: inv.totalVenta,
+                items: inv.items || [], 
+                estadoVisita: 'Pendiente', 
+                tipo: inv.tipo || 'venta'
+            };
+        });
+        
         try {
             await runTransaction(db, async (transaction) => {
                 const routeRef = doc(db, 'rutas', route.id);
@@ -541,34 +571,22 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                     throw new Error("La ruta ya fue modificada o despachada por otro usuario.");
                 }
 
-                // Aseguramos que los datos de las facturas estén actualizados y en el orden actual del planner
-                const facturasParaRuta = stagedInvoices.map(inv => {
-                    const fullInvoiceData = pendingInvoices.find(p => p.id === inv.id) || inv;
-                    return {
-                        id: fullInvoiceData.id, 
-                        clienteId: fullInvoiceData.clienteId, 
-                        clienteNombre: fullInvoiceData.clienteNombre,
-                        clienteDireccion: fullInvoiceData.clienteDireccion, 
-                        totalVenta: fullInvoiceData.totalVenta,
-                        items: fullInvoiceData.items, 
-                        estadoVisita: 'Pendiente', // Estado inicial para el repartidor
-                    };
-                });
-
+                // 2. Usamos la lista COMPLETA Y ORDENADA en la transacción
                 transaction.update(routeRef, {
                     estado: 'En Curso', repartidorId: assignedRepartidor,
                     repartidorNombre: repartidor?.nombreCompleto || 'N/A',
-                    facturas: facturasParaRuta, // Usamos la lista reordenada
+                    facturas: facturasCompletasParaRuta, // <-- Lista ordenada por fecha
                     resumen: routeSummary,
                 });
                 
-                stagedInvoices.forEach(invoice => {
+                facturasCompletasParaRuta.forEach(invoice => {
                     const invoiceRef = doc(db, 'ventas', invoice.id);
                     transaction.update(invoiceRef, { estado: 'Repartiendo', rutaId: route.id });
                 });
             });
 
-            const htmlContent = generateLoadingReportHTML(stagedInvoices, route.nombre, repartidor?.nombreCompleto);
+            // 3. Usamos la lista COMPLETA Y ORDENADA para el reporte de carga
+            const htmlContent = generateLoadingReportHTML(facturasCompletasParaRuta, route.nombre, repartidor?.nombreCompleto);
             printHTML(htmlContent);
             onClose();
         } catch (error) {
@@ -578,6 +596,7 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
             setIsSaving(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 animate-fade-in">
@@ -609,13 +628,11 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                                         <div>
                                             <p className="font-semibold text-gray-800 truncate">{invoice.clienteNombre}</p>
                                             <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
-                                            {/* --- INICIO DE LA CORRECCIÓN --- */}
                                             {invoice.tipo === 'devolucion' && (
                                             <span className="mt-1 text-xs font-bold uppercase px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">
                                              INTERCAMBIO / DEVOLUCIÓN
                                               </span>
                                               )}
-                                        {/* --- FIN DE LA CORRECCIÓN --- */}
                                         </div>
                                         <div className="text-right flex-shrink-0">
                                             <p className="font-bold text-base text-indigo-600">{formatCurrency(invoice.totalVenta)}</p>
@@ -631,36 +648,31 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                     <div className={`w-full ${!isReadOnly ? 'md:w-2/3' : 'md:w-full'} p-4 flex flex-col`}>
                         <div className="bg-white rounded-xl shadow-lg p-4 flex-grow flex flex-col">
                             <h4 className="font-bold text-xl mb-4 text-gray-700 flex-shrink-0 border-b pb-2">
-                                Lista de Paradas ({stagedInvoices.length})
+                                Lista de Paradas ({sortedStagedInvoices.length}) {/* Usamos la lista ordenada */}
                             </h4>
                             <div className="flex-grow overflow-y-auto bg-gray-50 rounded-lg p-3 space-y-3">
-                                {stagedInvoices.length === 0 && <p className="text-center text-gray-500 mt-8 italic">Añade facturas para planificar la ruta.</p>}
-                                {stagedInvoices.map((invoice, index) => (
+                                {sortedStagedInvoices.length === 0 && <p className="text-center text-gray-500 mt-8 italic">Añade facturas para planificar la ruta.</p>}
+                                
+                                {/* --- ¡¡¡INICIO DE LA CORRECCIÓN DE ORDENAMIENTO (RENDER)!!! --- */}
+                                {/* Mapeamos la lista ORDENADA */}
+                                {sortedStagedInvoices.map((invoice, index) => (
                                     <div key={invoice.id} className="flex items-center p-3 border border-gray-100 bg-white rounded-lg shadow-sm transition-shadow hover:shadow-md">
                                         <span className="text-2xl font-extrabold text-indigo-600 mr-4 w-8 flex-shrink-0 text-center">{index + 1}</span>
                                         <div className="flex-grow">
                                             <p className="font-semibold text-gray-800">{invoice.clienteNombre}</p>
                                             <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
-                                            {/* --- INICIO DE LA CORRECCIÓN --- */}
                                                {invoice.tipo === 'devolucion' && (
                                          <span className="mt-1 text-xs font-bold uppercase px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">
                                               INTERCAMBIO / DEVOLUCIÓN
                                            </span>
-        )}
-        {/* --- FIN DE LA CORRECCIÓN --- */}
+                                        )}
                                         </div>
                                         <div className="text-right flex items-center gap-2 flex-shrink-0">
                                             {isReadOnly && <span className={getStatusBadge(invoice.estadoVisita || 'Pendiente')}>{invoice.estadoVisita || 'Pendiente'}</span>}
                                             <span className="font-bold text-gray-700 ml-2">{formatCurrency(invoice.totalVenta)}</span>
                                             
-                                            {/* Controles de Reordenamiento (Solo Planificación) */}
-                                            {!isReadOnly && (
-                                                <div className="flex flex-col ml-3">
-                                                    <button onClick={() => moveInvoice(index, -1)} disabled={index === 0} className="p-0.5 text-indigo-500 hover:text-indigo-700 disabled:text-gray-300 transition-colors"><ArrowUpIcon /></button>
-                                                    <button onClick={() => moveInvoice(index, 1)} disabled={index === stagedInvoices.length - 1} className="p-0.5 text-indigo-500 hover:text-indigo-700 disabled:text-gray-300 transition-colors"><ArrowDownIcon /></button>
-                                                </div>
-                                            )}
-
+                                            {/* --- CORRECCIÓN: Botones de reordenamiento eliminados --- */}
+                                            
                                             {/* Botón de Eliminar (Solo Planificación) */}
                                             {!isReadOnly && (
                                                 <button onClick={() => removeInvoiceFromRoute(invoice.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors ml-2"><XIcon width={16} height={16} /></button>
@@ -668,6 +680,7 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                                         </div>
                                     </div>
                                 ))}
+                                {/* --- ¡¡¡FIN DE LA CORRECCIÓN DE ORDENAMIENTO (RENDER)!!! --- */}
                             </div>
                         </div>
                     </div>
