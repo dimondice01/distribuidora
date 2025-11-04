@@ -609,6 +609,13 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                                         <div>
                                             <p className="font-semibold text-gray-800 truncate">{invoice.clienteNombre}</p>
                                             <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
+                                            {/* --- INICIO DE LA CORRECCIÓN --- */}
+                                            {invoice.tipo === 'devolucion' && (
+                                            <span className="mt-1 text-xs font-bold uppercase px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">
+                                             INTERCAMBIO / DEVOLUCIÓN
+                                              </span>
+                                              )}
+                                        {/* --- FIN DE LA CORRECCIÓN --- */}
                                         </div>
                                         <div className="text-right flex-shrink-0">
                                             <p className="font-bold text-base text-indigo-600">{formatCurrency(invoice.totalVenta)}</p>
@@ -634,6 +641,13 @@ const RoutePlanner = ({ route, onClose, pendingInvoices, repartidores, zonas, on
                                         <div className="flex-grow">
                                             <p className="font-semibold text-gray-800">{invoice.clienteNombre}</p>
                                             <p className="text-xs text-gray-500 truncate">{invoice.clienteDireccion}</p>
+                                            {/* --- INICIO DE LA CORRECCIÓN --- */}
+                                               {invoice.tipo === 'devolucion' && (
+                                         <span className="mt-1 text-xs font-bold uppercase px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">
+                                              INTERCAMBIO / DEVOLUCIÓN
+                                           </span>
+        )}
+        {/* --- FIN DE LA CORRECCIÓN --- */}
                                         </div>
                                         <div className="text-right flex items-center gap-2 flex-shrink-0">
                                             {isReadOnly && <span className={getStatusBadge(invoice.estadoVisita || 'Pendiente')}>{invoice.estadoVisita || 'Pendiente'}</span>}

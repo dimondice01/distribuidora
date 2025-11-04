@@ -382,15 +382,15 @@ function Facturacion() {
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-sm divide-y divide-gray-200">
                         <thead className="bg-gray-100">
-                             <tr>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase"># Factura</th>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Fecha</th>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Cliente</th>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Vendedor</th>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Estado</th>
-                                <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Total</th>
-                                <th className="px-6 py-3 font-semibold text-right text-gray-600 uppercase">Acciones</th>
-                            </tr>
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase"># Factura</th>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Fecha</th>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Cliente</th>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Vendedor</th>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Estado</th>
+                                    <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Total</th>
+                                    <th className="px-6 py-3 font-semibold text-right text-gray-600 uppercase">Acciones</th>
+                                </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {paginatedVentas.map((venta) => {
@@ -398,18 +398,30 @@ function Facturacion() {
                                 const clienteNombre = venta.clienteNombre || (clientes.find(c => c.id === venta.clienteId)?.nombre);
                                 const vendedorNombre = venta.vendedorNombre || (vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto);
                                 return (
-                                <tr key={venta.id} className="hover:bg-gray-50">
+                                // ==================================================================
+                                // --- CAMBIO: Estilo condicional de la Fila (<tr>) ---
+                                // ==================================================================
+                                <tr key={venta.id} className={
+                                    venta.tipo === 'devolucion' ? 'bg-red-50 hover:bg-red-100' : 
+                                    (venta.estado === 'Anulada' ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50')
+                                }>
                                     <td className="px-6 py-4 font-mono text-gray-600">#{venta.numeroFactura || venta.id.substring(0, 8)}</td>
                                     <td className="px-6 py-4 text-gray-800">{venta.fecha.toLocaleDateString('es-AR')}</td>
                                     <td className="px-6 py-4 text-gray-600">{clienteNombre}</td>
                                     <td className="px-6 py-4 text-gray-600">{vendedorNombre}</td>
+                                    {/* ================================================================== */}
+                                    {/* --- CAMBIO: Lógica condicional de la Columna "Estado" (<td>) --- */}
+                                    {/* ================================================================== */}
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                                            venta.tipo === 'devolucion' ? 'bg-red-200 text-red-900' : // <-- AÑADIDO
                                             venta.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 
                                             venta.estado === 'Adeuda' ? 'bg-yellow-100 text-yellow-800' :
                                             venta.estado === 'Pendiente de Pago' ? 'bg-orange-100 text-orange-800' : 
                                             venta.estado === 'Repartiendo' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                                        }`}>{venta.estado}</span>
+                                        }`}>
+                                            {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado} {/* <-- AÑADIDO */}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4 text-green-600 font-bold">{formatCurrency(venta.totalVenta)}</td>
                                     <td className="px-6 py-4 text-right">
@@ -432,32 +444,32 @@ function Facturacion() {
             </div>
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                     <div className="w-full max-w-4xl p-6 bg-white rounded-lg shadow-xl overflow-hidden">
-                        <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-medium text-gray-900">{editingInvoice ? 'Editar Factura' : 'Nueva Factura'}</h3><button onClick={() => setIsModalOpen(false)} className="p-2 rounded-full hover:bg-gray-200"><XIcon/></button></div>
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                                <select value={newInvoice.vendedorId} onChange={(e) => setNewInvoice({...newInvoice, vendedorId: e.target.value})} className="w-full p-2 border rounded-md" required><option value="" disabled>Seleccionar Vendedor *</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}</select>
-                                <input type="text" placeholder="Buscar cliente por nombre, DNI o CUIT..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="w-full p-2 border rounded-md"/>
-                                <select value={newInvoice.clienteId} onChange={handleClientChange} className="w-full p-2 border rounded-md" size={filteredClients.length > 5 ? 5 : undefined}>
-                                    <option value="">-- Consumidor Final --</option>
-                                    {filteredClients.map(c => <option key={c.id} value={c.id}>{c.nombre || c.nombreCompleto} ({c.dni || c.cuit || 'S/D'})</option>)}
-                                </select>
-                                <textarea placeholder="Observaciones de la venta (Alineación BD Móvil)..." value={newInvoice.observaciones} onChange={(e) => setNewInvoice({...newInvoice, observaciones: e.target.value})} rows="3" className="w-full p-2 border rounded-md resize-none"></textarea>
-                                <div className="p-2 border rounded-md min-h-[200px] flex flex-col"><h4 className="font-semibold mb-2">Carrito de Compra:</h4><div className="flex-grow space-y-2 overflow-y-auto">{newInvoice.items.length === 0 ? (<p className="text-gray-400 text-sm">Agrega productos.</p>) : (newInvoice.items.map((item) => (<div key={item.productId} className="flex justify-between items-center text-sm"><span className="flex-1 truncate pr-2">{item.nombre}</span><div className="flex items-center gap-2"><input type="number" value={item.quantity} onChange={(e) => handleCartQuantityChange(item.productId, e.target.value)} className="w-16 p-1 border rounded-md text-center" min="1" /><span>{formatCurrency(item.precio * item.quantity)}</span><button type="button" onClick={() => handleRemoveItemFromCart(item.productId)} className="p-1 text-red-500 hover:text-red-700"><TrashIcon width={14} height={14}/></button></div></div>)))}</div><div className="mt-4 pt-2 border-t font-bold flex justify-between"><span>TOTAL:</span><span>{formatCurrency(calculateTotal())}</span></div></div>
+                        <div className="w-full max-w-4xl p-6 bg-white rounded-lg shadow-xl overflow-hidden">
+                            <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-medium text-gray-900">{editingInvoice ? 'Editar Factura' : 'Nueva Factura'}</h3><button onClick={() => setIsModalOpen(false)} className="p-2 rounded-full hover:bg-gray-200"><XIcon/></button></div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <select value={newInvoice.vendedorId} onChange={(e) => setNewInvoice({...newInvoice, vendedorId: e.target.value})} className="w-full p-2 border rounded-md" required><option value="" disabled>Seleccionar Vendedor *</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}</select>
+                                    <input type="text" placeholder="Buscar cliente por nombre, DNI o CUIT..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="w-full p-2 border rounded-md"/>
+                                    <select value={newInvoice.clienteId} onChange={handleClientChange} className="w-full p-2 border rounded-md" size={filteredClients.length > 5 ? 5 : undefined}>
+                                        <option value="">-- Consumidor Final --</option>
+                                        {filteredClients.map(c => <option key={c.id} value={c.id}>{c.nombre || c.nombreCompleto} ({c.dni || c.cuit || 'S/D'})</option>)}
+                                    </select>
+                                    <textarea placeholder="Observaciones de la venta (Alineación BD Móvil)..." value={newInvoice.observaciones} onChange={(e) => setNewInvoice({...newInvoice, observaciones: e.target.value})} rows="3" className="w-full p-2 border rounded-md resize-none"></textarea>
+                                    <div className="p-2 border rounded-md min-h-[200px] flex flex-col"><h4 className="font-semibold mb-2">Carrito de Compra:</h4><div className="flex-grow space-y-2 overflow-y-auto">{newInvoice.items.length === 0 ? (<p className="text-gray-400 text-sm">Agrega productos.</p>) : (newInvoice.items.map((item) => (<div key={item.productId} className="flex justify-between items-center text-sm"><span className="flex-1 truncate pr-2">{item.nombre}</span><div className="flex items-center gap-2"><input type="number" value={item.quantity} onChange={(e) => handleCartQuantityChange(item.productId, e.target.value)} className="w-16 p-1 border rounded-md text-center" min="1" /><span>{formatCurrency(item.precio * item.quantity)}</span><button type="button" onClick={() => handleRemoveItemFromCart(item.productId)} className="p-1 text-red-500 hover:text-red-700"><TrashIcon width={14} height={14}/></button></div></div>)))}</div><div className="mt-4 pt-2 border-t font-bold flex justify-between"><span>TOTAL:</span><span>{formatCurrency(calculateTotal())}</span></div></div>
+                                </div>
+                                <div className="border rounded-md p-2 flex flex-col max-h-[400px]">
+                                    <h4 className="font-semibold mb-2 text-center">Agregar Productos</h4>
+                                    <div className="p-1 flex gap-2 mb-2 sticky top-0 bg-white z-10"><input type="text" placeholder="Buscar producto..." className="w-full p-2 border rounded-md" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /><button type="button" onClick={() => {}} className="p-2 border rounded-md hover:bg-gray-100" title="Escanear código de barras"><BarcodeIcon width={20} height={20} /></button></div>
+                                    <div className="overflow-y-auto">{filteredProducts.map(p => (<div key={p.id} onClick={() => { setProductForQuantity(p); setQuantityToAdd(1); }} className="p-2 mb-1 flex justify-between items-center hover:bg-indigo-100 cursor-pointer rounded-md"><span>{p.nombre}</span><span className="font-semibold text-green-600">{formatCurrency(p.precio)}</span></div>))}</div>
+                                </div>
                             </div>
-                            <div className="border rounded-md p-2 flex flex-col max-h-[400px]">
-                                <h4 className="font-semibold mb-2 text-center">Agregar Productos</h4>
-                                <div className="p-1 flex gap-2 mb-2 sticky top-0 bg-white z-10"><input type="text" placeholder="Buscar producto..." className="w-full p-2 border rounded-md" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /><button type="button" onClick={() => {}} className="p-2 border rounded-md hover:bg-gray-100" title="Escanear código de barras"><BarcodeIcon width={20} height={20} /></button></div>
-                                <div className="overflow-y-auto">{filteredProducts.map(p => (<div key={p.id} onClick={() => { setProductForQuantity(p); setQuantityToAdd(1); }} className="p-2 mb-1 flex justify-between items-center hover:bg-indigo-100 cursor-pointer rounded-md"><span>{p.nombre}</span><span className="font-semibold text-green-600">{formatCurrency(p.precio)}</span></div>))}</div>
+                            {error && <p className="col-span-1 md:col-span-2 text-sm text-red-600 bg-red-100 p-2 rounded-md mt-4">{error}</p>}
+                            <div className="col-span-1 md:col-span-2 flex justify-end pt-4 space-x-2">
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-white border rounded-md">Cancelar</button>
+                                <button type="button" onClick={() => handleSaveInvoice()} className="px-4 py-2 text-white bg-gray-600 rounded-md">Guardar Pendiente</button>
+                                <button type="button" onClick={() => setIsCollectModalOpen(true)} className="px-4 py-2 text-white bg-green-600 rounded-md">Finalizar y Cobrar</button>
                             </div>
                         </div>
-                        {error && <p className="col-span-1 md:col-span-2 text-sm text-red-600 bg-red-100 p-2 rounded-md mt-4">{error}</p>}
-                        <div className="col-span-1 md:col-span-2 flex justify-end pt-4 space-x-2">
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-white border rounded-md">Cancelar</button>
-                            <button type="button" onClick={() => handleSaveInvoice()} className="px-4 py-2 text-white bg-gray-600 rounded-md">Guardar Pendiente</button>
-                            <button type="button" onClick={() => setIsCollectModalOpen(true)} className="px-4 py-2 text-white bg-green-600 rounded-md">Finalizar y Cobrar</button>
-                        </div>
-                    </div>
                 </div>
             )}
             {productForQuantity && ( <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"> <div className="w-full max-w-xs p-6 bg-white rounded-lg shadow-xl"><h3 className="text-lg font-medium text-gray-900">Agregar {productForQuantity.nombre}</h3><div className="mt-4"><label htmlFor="quantity" className="block text-sm font-medium text-gray-700">Cantidad</label><input type="number" id="quantity" value={quantityToAdd} onChange={(e) => setQuantityToAdd(e.target.value)} className="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" autoFocus min="1" /></div><div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={() => setProductForQuantity(null)} className="px-4 py-2 bg-white border rounded-md">Cancelar</button><button type="button" onClick={() => { handleAddItem(productForQuantity, quantityToAdd); setProductForQuantity(null); }} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Agregar</button></div></div> </div> )}
