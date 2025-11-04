@@ -245,7 +245,10 @@ function Products() {
                     <td className="px-6 py-4 text-gray-500">{getCategory(product.categoriaId)?.nombre || 'N/A'}</td>
                     <td className="px-6 py-4 text-gray-800">{getEffectiveCommission(product)}</td>
                     <td className="px-6 py-4 text-green-600 font-semibold">${Number(product.precio).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-gray-600">{product.stock}</td>
+                    <td className={`px-6 py-4 text-gray-600 font-bold ${product.stock < 10 ? 'text-red-600' : ''}`}>
+        {product.stock}
+        {product.stock < 10 && <span className="ml-2 text-xs">(Bajo)</span>}
+    </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center space-x-4">
                         <button onClick={() => openModalForEdit(product)} className="text-blue-500 hover:text-blue-700"><EditIcon /></button>

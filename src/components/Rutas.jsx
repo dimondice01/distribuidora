@@ -407,7 +407,7 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly }) => {
         const paradasCompletadas = currentRouteInvoices.filter(inv => inv.estado !== 'Repartiendo' && inv.estado !== 'Pendiente de Entrega').length;
         const totalParadas = currentRouteInvoices.length;
         const progreso = totalParadas > 0 ? (paradasCompletadas / totalParadas) * 100 : 0;
-        const dineroCobrado = currentRouteInvoices.reduce((sum, inv) => sum + (inv.pagoEfectivo || 0), 0);
+        const dineroCobrado = currentRouteInvoices.reduce((sum, inv) => sum + (inv.pagoEfectivo || 0) + (inv.pagoTransferencia || 0), 0);
         
         let proximaParada = 'Finalizada';
         const nextStopInvoice = (facturas || []).find(planned => {

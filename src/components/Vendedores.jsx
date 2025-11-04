@@ -112,7 +112,8 @@ function Vendedores() {
           username: formData.username,
           email: formData.email,
           rango: formData.rango,
-          zonasAsignadas: formData.zonasAsignadas
+          zonasAsignadas: formData.zonasAsignadas,
+          firebaseAuthUid: newUser.uid
           // Ya no es necesario guardar el campo 'uid' adentro del documento
         });
       }

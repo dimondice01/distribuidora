@@ -92,7 +92,7 @@ function Clientes() {
             localidad: formData.localidad.trim(),
             zonaId: formData.zonaId,
             vendedorAsignadoId: formData.vendedorAsignadoId,
-            fechaAlta: editingClientId && formData.fechaAlta ? formData.fechaAlta : Timestamp.now() 
+            fechaCreacion: editingClientId && formData.fechaCreacion ? formData.fechaCreacion : Timestamp.now() 
         };
         
         try {
