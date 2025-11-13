@@ -4,7 +4,6 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // PEGA AQUÍ LA CONFIGURACIÓN DE TU PROYECTO DE FIREBASE
-// Esta es la que me habías pasado antes.
 const firebaseConfig = {
   apiKey: "AIzaSyA5M0UOCZuDvuq_B4tYV5TcFv9eQVvk074",
   authDomain: "distribuidora-1de93.firebaseapp.com",
@@ -15,10 +14,9 @@ const firebaseConfig = {
 };
 
 
-// Inicializa Firebase
-const app = initializeApp(firebaseConfig);
+// Inicializa Firebase y lo exporta
+export const app = initializeApp(firebaseConfig); // <-- CORRECCIÓN AQUÍ
 
 // Exporta los servicios que usaremos en la aplicación
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-

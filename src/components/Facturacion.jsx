@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase.js';
+// Importamos 'app' además de 'db'
+import { db, app } from '../firebase.js'; 
 import { collection, onSnapshot, orderBy, query, getDocs, doc, runTransaction, Timestamp, updateDoc, increment, addDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+// Importamos las funciones de la Nube CORRECTAMENTE desde su SDK
+import { getFunctions as getFunctionsFromApp, httpsCallable } from 'firebase/functions'; 
 
 // --- Iconos SVG ---
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
@@ -19,8 +22,6 @@ const calculateTotalCosto = (items) => (items || []).reduce((total, item) => tot
 const calculateTotalComision = (items = []) => {
     return items.reduce((total, item) => {
         const itemTotal = (item.precio || 0) * (item.quantity || 0);
-        // Usa item.comision / 100 si la BD guarda la comisión como porcentaje (ej. 5 para 5%)
-        // Si la BD guarda la comisión como un decimal (ej. 0.05 para 5%), se usa solo item.comision
         // Asumiendo que es un valor numérico (e.g. 5, 10) que debe dividirse por 100.
         const itemComision = itemTotal * ((item.comision || 0) / 100);
         return total + itemComision;
@@ -74,6 +75,72 @@ const CollectSaleModal = ({ total, onConfirm, onClose }) => {
     };
     return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 animate-fade-in-scale"><div className="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl"><h3 className="text-xl font-bold text-gray-800 mb-4">Registrar Cobro Inmediato</h3><p className="text-lg mb-4">Total: <span className="font-bold">{formatCurrency(total)}</span></p><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Efectivo</label><input type="number" step="0.01" value={pagoEfectivo} onChange={(e) => { setPagoEfectivo(e.target.value); setError(''); }} className="w-full px-3 py-2 border rounded-md" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Transferencia</label><input type="number" step="0.01" value={pagoTransferencia} onChange={(e) => { setPagoTransferencia(e.target.value); setError(''); }} className="w-full px-3 py-2 border rounded-md" /></div><div className="pt-2 border-t text-lg font-bold flex justify-between"><span>Pendiente:</span><span className={saldoPendiente > 0.01 ? 'text-red-600' : 'text-green-600'}>{formatCurrency(saldoPendiente)}</span></div></div>{error && <p className="mt-4 text-sm text-red-600">{error}</p>}<div className="flex justify-end pt-6 space-x-3"><button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button><button type="button" onClick={handleConfirm} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700">Confirmar</button></div></div></div>;
 };
+
+// --- NUEVO: Componente para el Test de Conexión AFIP ---
+const AfipTestPanel = () => {
+    const [status, setStatus] = useState("Click para iniciar test de conexión AFIP");
+    const [response, setResponse] = useState(null);
+
+    const testConnection = async () => {
+        setStatus("Iniciando conexión con AFIP-Service...");
+        
+        try {
+            // Utilizamos getFunctionsFromApp para la inicialización
+            const functions = getFunctionsFromApp(app);
+            
+            // Referencia a la función desplegada en el codebase 'afip-service'
+            const afipTest = httpsCallable(functions, 'afipTestConnection');
+
+            // Llamada a la Cloud Function (la petición final a ARCA/AFIP)
+            const result = await afipTest({});
+
+            const data = result.data;
+            setStatus(`✅ ÉXITO DE CONEXIÓN: ${data.message}`);
+            setResponse(data.response);
+
+        } catch (error) {
+            console.error("Fallo la conexión:", error);
+            // El error.message contendrá el detalle que enviamos desde la Cloud Function
+            const errorMessage = error.message || (error.details && error.details.message) || 'Error desconocido al invocar la función.';
+            setStatus(`❌ ERROR: ${errorMessage}`); 
+            setResponse(null);
+        }
+    };
+
+    return (
+        <div className="p-4 bg-red-50 rounded-lg shadow-inner max-w-full mb-6">
+            <h3 className="text-xl font-bold text-red-800 mb-2">Integración de Facturación Electrónica (ARCA/AFIP)</h3>
+            <p className="text-sm text-gray-700 mb-4">
+                El entorno de AFIP se ejecuta en un servicio separado (`afip-service`) para garantizar la estabilidad del ERP.
+            </p>
+            <div className="flex flex-col md:flex-row md:items-center space-x-0 md:space-x-4 space-y-4 md:space-y-0">
+                <button 
+                    onClick={testConnection} 
+                    disabled={status.includes('Iniciando')}
+                    className={`
+                        px-4 py-2 text-sm font-medium rounded-lg shadow-md transition-all duration-200
+                        ${status.includes('Iniciando') 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-red-700 hover:bg-red-800 text-white'}
+                    `}
+                >
+                    {status.includes('Iniciando') ? 'Testeando Conexión...' : 'Ejecutar Test de Conexión AFIP'}
+                </button>
+                <p className={`text-base font-semibold ${status.startsWith('✅') ? 'text-green-600' : status.startsWith('❌') ? 'text-red-600' : 'text-gray-700'}`}>
+                    {status}
+                </p>
+            </div>
+            
+            {response && (
+                <div className="mt-4 p-3 bg-slate-900 text-green-400 rounded-md overflow-x-auto text-xs shadow-inner">
+                    <p className="font-bold mb-1 text-white">Respuesta de Servidores AFIP:</p>
+                    <pre>{JSON.stringify(response, null, 2)}</pre>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 function Facturacion() {
     const [ventas, setVentas] = useState([]);
@@ -361,11 +428,16 @@ function Facturacion() {
     return (
         <div className="p-4 bg-gray-50 rounded-lg min-h-screen animate-fade-in">
             <style>{`.animate-fade-in { animation: fadeIn 0.5s ease-out; } @keyframes fadeIn { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }`}</style>
+            
+            {/* INYECTAMOS EL PANEL DE PRUEBA DE AFIP AQUÍ */}
+            <AfipTestPanel />
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div className="bg-white p-6 rounded-lg shadow flex items-center transition-transform hover:scale-105"><div className="bg-green-100 text-green-600 p-3 rounded-full mr-4"><DollarSignIcon/></div><div><p className="text-sm text-gray-500">Ventas del Día (Pagadas)</p><p className="text-2xl font-bold">{formatCurrency(metrics.salesToday)}</p></div></div>
                 <div className="bg-white p-6 rounded-lg shadow flex items-center transition-transform hover:scale-105"><div className="bg-blue-100 text-blue-600 p-3 rounded-full mr-4"><DollarSignIcon/></div><div><p className="text-sm text-gray-500">Ventas del Mes (Pagadas)</p><p className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</p></div></div>
                 <div className="bg-white p-6 rounded-lg shadow flex items-center transition-transform hover:scale-105"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-full mr-4"><BarChartIcon/></div><div><p className="text-sm text-gray-500">Ganancia Neta (Mes)</p><p className="text-2xl font-bold">{formatCurrency(metrics.netProfitMonth)}</p></div></div>
             </div>
+            {/* CONTINÚA EL CÓDIGO ORIGINAL */}
             <div className="bg-white p-6 rounded-lg shadow">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                     <h2 className="text-xl font-bold text-gray-700">Historial de Facturación</h2>
@@ -398,20 +470,14 @@ function Facturacion() {
                                 const clienteNombre = venta.clienteNombre || (clientes.find(c => c.id === venta.clienteId)?.nombre);
                                 const vendedorNombre = venta.vendedorNombre || (vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto);
                                 return (
-                                // ==================================================================
-                                // --- CAMBIO: Estilo condicional de la Fila (<tr>) ---
-                                // ==================================================================
                                 <tr key={venta.id} className={
                                     venta.tipo === 'devolucion' ? 'bg-red-50 hover:bg-red-100' : 
                                     (venta.estado === 'Anulada' ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50')
-                                }>
+                                    }>
                                     <td className="px-6 py-4 font-mono text-gray-600">#{venta.numeroFactura || venta.id.substring(0, 8)}</td>
                                     <td className="px-6 py-4 text-gray-800">{venta.fecha.toLocaleDateString('es-AR')}</td>
                                     <td className="px-6 py-4 text-gray-600">{clienteNombre}</td>
                                     <td className="px-6 py-4 text-gray-600">{vendedorNombre}</td>
-                                    {/* ================================================================== */}
-                                    {/* --- CAMBIO: Lógica condicional de la Columna "Estado" (<td>) --- */}
-                                    {/* ================================================================== */}
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
                                             venta.tipo === 'devolucion' ? 'bg-red-200 text-red-900' : // <-- AÑADIDO
@@ -419,7 +485,7 @@ function Facturacion() {
                                             venta.estado === 'Adeuda' ? 'bg-yellow-100 text-yellow-800' :
                                             venta.estado === 'Pendiente de Pago' ? 'bg-orange-100 text-orange-800' : 
                                             venta.estado === 'Repartiendo' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                                        }`}>
+                                            }`}>
                                             {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado} {/* <-- AÑADIDO */}
                                         </span>
                                     </td>
