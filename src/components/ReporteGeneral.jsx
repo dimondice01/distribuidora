@@ -7,7 +7,6 @@ const TrendingUp = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24}
 const TrendingDown = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>;
 const DollarSign = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
 const CreditCard = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
-// --- CAMBIO: Icono para Devoluciones ---
 const RefreshCw = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 
 
@@ -38,8 +37,12 @@ function ReporteGeneral() {
         return Timestamp.fromDate(d);
     });
 
+    // --- NUEVO: ESTADO DE PAGINACIÓN ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(15);
+
     // ==================================================================
-    // --- CAMBIO: Lógica de 'useMemo' para separar Ventas y Devoluciones ---
+    // --- Lógica de 'useMemo' para totales (Sin cambios) ---
     // ==================================================================
     const {
         totalVenta,
@@ -62,11 +65,9 @@ function ReporteGeneral() {
             const saldo = v.saldoPendiente || 0;
 
             if (v.tipo === 'devolucion') {
-                // Es una devolución: Suma al costo de devoluciones
                 acc.totalCostoDevoluciones += costo;
                 acc.cantidadDevoluciones += 1;
             } else if (v.estado !== RENDER_STATUS.ANULADA) {
-                // Es una Venta, Reposición o Antigua (que no esté Anulada)
                 acc.totalVenta += venta;
                 acc.totalCosto += costo;
                 acc.totalDeuda += saldo;
@@ -81,14 +82,13 @@ function ReporteGeneral() {
             cantidadDevoluciones: 0
         });
 
-        // La Ganancia Bruta ahora resta el costo de las devoluciones
         const gananciaBruta = totalVenta - totalCosto - totalCostoDevoluciones;
 
         return { totalVenta, totalCosto, totalDeuda, gananciaBruta, totalCostoDevoluciones, cantidadDevoluciones };
 
     }, [ventas]);
     // ==================================================================
-    // --- FIN DEL CAMBIO en 'useMemo' ---
+    // --- FIN DEL 'useMemo' de totales ---
     // ==================================================================
 
 
@@ -97,7 +97,6 @@ function ReporteGeneral() {
         const q = query(
             collection(db, "ventas"),
             orderBy("fecha", "desc"),
-            // (Mantenemos la lógica de filtrado de fechas)
         );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -115,6 +114,7 @@ function ReporteGeneral() {
                 }
             });
             setVentas(ventasData);
+            setCurrentPage(1); // Resetear paginación al cambiar filtros de fecha
             setIsLoading(false);
         }, (error) => {
             console.error("Error al obtener ventas: ", error);
@@ -123,6 +123,26 @@ function ReporteGeneral() {
 
         return () => unsubscribe();
     }, [startDate, endDate]);
+
+    
+    // --- NUEVO: useMemo para la paginación ---
+    const { paginatedVentas, totalPages } = useMemo(() => {
+        const total = ventas.length;
+        const totalP = Math.ceil(total / itemsPerPage);
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        return {
+            paginatedVentas: ventas.slice(start, end),
+            totalPages: totalP
+        };
+    }, [ventas, currentPage, itemsPerPage]);
+
+    // --- NUEVO: Handlers de paginación ---
+    const handlePageChange = (newPage) => {
+        if (newPage > 0 && newPage <= totalPages) {
+            setCurrentPage(newPage);
+        }
+    };
 
 
     const handleDateChange = (e) => {
@@ -180,56 +200,84 @@ function ReporteGeneral() {
                     </div>
                 </div>
 
-                {/* Tarjetas de Resumen */}
+                {/* ================================================== */}
+                {/* --- CAMBIO: Tarjetas de Resumen (Estilo Corregido) --- */}
+                {/* ================================================== */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
-                    {/* Tarjeta 1: Total Venta (Modificada) */}
-                    <div className="bg-white rounded-lg shadow p-5 flex items-center space-x-4">
-                        <div className="p-3 rounded-full bg-green-100 text-green-600"><TrendingUp /></div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Total Ventas (Neto)</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalVenta)}</p>
+                    
+                    {/* Card 1: Total Ventas */}
+                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500 flex flex-col justify-between h-full">
+                        <div className="flex items-start gap-4"> 
+                            <div className="p-3 rounded-xl bg-green-100 text-green-600">{<TrendingUp />}</div>
+                            <div className="min-w-0 flex-1"> 
+                                <p className="text-sm text-gray-500 font-medium">Total Ventas (Neto)</p>
+                            </div>
+                        </div>
+                        <div className="mt-3">
+                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalVenta)}</p>
                         </div>
                     </div>
-                    {/* Tarjeta 2: Ganancia Bruta (Modificada) */}
-                    <div className="bg-white rounded-lg shadow p-5 flex items-center space-x-4">
-                        <div className="p-3 rounded-full bg-blue-100 text-blue-600"><DollarSign /></div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Ganancia Bruta</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(gananciaBruta)}</p>
+
+                    {/* Card 2: Ganancia Bruta */}
+                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-blue-500 flex flex-col justify-between h-full">
+                        <div className="flex items-start gap-4"> 
+                            <div className="p-3 rounded-xl bg-blue-100 text-blue-600">{<DollarSign />}</div>
+                            <div className="min-w-0 flex-1"> 
+                                <p className="text-sm text-gray-500 font-medium">Ganancia Bruta</p>
+                            </div>
+                        </div>
+                        <div className="mt-3">
+                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(gananciaBruta)}</p>
                         </div>
                     </div>
-                    {/* Tarjeta 3: Deuda (Modificada) */}
-                    <div className="bg-white rounded-lg shadow p-5 flex items-center space-x-4">
-                        <div className="p-3 rounded-full bg-yellow-100 text-yellow-600"><CreditCard /></div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Saldo Pendiente (Deuda)</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalDeuda)}</p>
+
+                    {/* Card 3: Saldo Pendiente */}
+                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-yellow-500 flex flex-col justify-between h-full">
+                        <div className="flex items-start gap-4"> 
+                            <div className="p-3 rounded-xl bg-yellow-100 text-yellow-600">{<CreditCard />}</div>
+                            <div className="min-w-0 flex-1"> 
+                                <p className="text-sm text-gray-500 font-medium">Saldo Pendiente</p>
+                            </div>
+                        </div>
+                        <div className="mt-3">
+                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalDeuda)}</p>
+                        </div>
+                    </div>
+
+                    {/* Card 4: Costo Devoluciones */}
+                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500 flex flex-col justify-between h-full">
+                        <div className="flex items-start gap-4"> 
+                            <div className="p-3 rounded-xl bg-red-100 text-red-600">{<RefreshCw />}</div>
+                            <div className="min-w-0 flex-1"> 
+                                <p className="text-sm text-gray-500 font-medium">Costo Devoluciones</p>
+                                <p className="text-xs text-gray-400">{cantidadDevoluciones} devol.</p>
+                            </div>
+                        </div>
+                        <div className="mt-3">
+                            <p className="text-2xl font-bold text-red-700 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalCostoDevoluciones)}</p>
                         </div>
                     </div>
                     
-                    {/* ================================================== */}
-                    {/* --- CAMBIO: Nueva Tarjeta de Devoluciones --- */}
-                    {/* ================================================== */}
-                    <div className="bg-white rounded-lg shadow p-5 flex items-center space-x-4">
-                        <div className="p-3 rounded-full bg-red-100 text-red-600"><RefreshCw /></div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Costo Devoluciones</p>
-                            <p className="text-2xl font-bold text-red-700">{formatCurrency(totalCostoDevoluciones)}</p>
-                            <p className="text-xs text-gray-500">{cantidadDevoluciones} devoluciones</p>
+                    {/* Card 5: Costo Mercadería */}
+                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-gray-500 flex flex-col justify-between h-full">
+                        <div className="flex items-start gap-4"> 
+                            <div className="p-3 rounded-xl bg-gray-100 text-gray-600">{<TrendingDown />}</div>
+                            <div className="min-w-0 flex-1"> 
+                                <p className="text-sm text-gray-500 font-medium">Costo Mercadería</p>
+                            </div>
                         </div>
-                    </div>
-                    
-                    {/* Tarjeta 5: Costo Total (Modificada) */}
-                    <div className="bg-white rounded-lg shadow p-5 flex items-center space-x-4">
-                        <div className="p-3 rounded-full bg-gray-100 text-gray-600"><TrendingDown /></div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Costo Mercadería (Ventas)</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCosto)}</p>
+                        <div className="mt-3">
+                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalCosto)}</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Tabla de Ventas (Modificada) */}
+                {/* ================================================== */}
+                {/* --- FIN CAMBIO TARJETAS --- */}
+                {/* ================================================== */}
+
+
+                {/* Tabla de Ventas (Modificada para paginación) */}
                 <h2 className="text-2xl font-semibold text-gray-800 mb-4">Historial de Operaciones</h2>
                 {isLoading ? (
                     <p>Cargando...</p>
@@ -248,8 +296,8 @@ function ReporteGeneral() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {ventas.map((venta) => (
-                                    // --- CAMBIO: Fila condicional ---
+                                {/* --- CAMBIO: Mapeo sobre 'paginatedVentas' --- */}
+                                {paginatedVentas.map((venta) => (
                                     <tr 
                                         key={venta.id} 
                                         className={
@@ -260,7 +308,6 @@ function ReporteGeneral() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{venta.fecha.toLocaleDateString('es-AR')}</td>
                                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{venta.clienteNombre}</td>
                                         <td className="px-6 py-4 text-sm text-gray-700">{venta.vendedorName}</td>
-                                        {/* --- CAMBIO: Columna de Estado --- */}
                                         <td className="px-6 py-4">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                                 venta.tipo === 'devolucion' ? 'bg-red-200 text-red-900' :
@@ -275,7 +322,6 @@ function ReporteGeneral() {
                                         </td>
                                         <td className="px-6 py-4 text-right font-medium">{formatCurrency(venta.totalVenta)}</td>
                                         <td className="px-6 py-4 text-right font-bold text-red-700">{formatCurrency(venta.saldoPendiente)}</td>
-                                        {/* (Esta ganancia bruta es Venta - Costo de esa línea) */}
                                         <td className={`px-6 py-4 text-right font-bold ${
                                             (venta.totalVenta - venta.totalCosto) < 0 ? 'text-red-700' : 'text-gray-700'
                                         }`}>
@@ -283,8 +329,38 @@ function ReporteGeneral() {
                                         </td>
                                     </tr>
                                 ))}
+                                {paginatedVentas.length === 0 && (
+                                    <tr>
+                                        <td colSpan="7" className="px-6 py-10 text-center text-gray-500 italic">
+                                            No se encontraron operaciones para el rango de fechas seleccionado.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
+
+                        {/* --- NUEVO: Controles de Paginación --- */}
+                        {totalPages > 1 && (
+                            <div className="flex justify-between items-center p-4 border-t">
+                                <button
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                    &larr; Anterior
+                                </button>
+                                <span className="text-sm text-gray-700">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                    Siguiente &rarr;
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
