@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { db } from '../firebase.js'; 
+// 1. IMPORTAMOS STORAGE
+import { db, storage } from '../firebase.js'; 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, limit } from 'firebase/firestore';
+// 2. IMPORTAMOS FUNCIONES DE STORAGE
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- Iconos SVG ---
 const EditIcon = (props) => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
@@ -8,28 +11,35 @@ const DeleteIcon = (props) => <svg className="w-5 h-5" fill="none" stroke="curre
 const BarcodeIcon = (props) => <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
 const SearchIcon = (props) => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
+// Icono para cuando no hay imagen
+const ImageIcon = (props) => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
 
 function Products() {
-  // --- SIMULACIÓN DE ROL (Conecta esto a tu Auth Context) ---
-  const isAdmin = true; // CAMBIAR A: const { user } = useAuth(); const isAdmin = user.role === 'admin';
+  // --- SIMULACIÓN DE ROL ---
+  const isAdmin = true; 
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // 3. ESTADOS PARA IMAGEN
+  const [imageFile, setImageFile] = useState(null); 
+  const [isUploading, setIsUploading] = useState(false);
+
   // Estado del formulario
   const [formData, setFormData] = useState({ 
     nombre: '', 
     precio: '', 
-    stock: '', // Stock TOTAL actual
+    stock: '', 
     codigoDeBarras: '', 
     costo: '', 
     categoriaId: '', 
     comisionEspecifica: '',
-    // Nuevos campos para la lógica de lotes/vencimiento
-    stockToAdd: '', // Cantidad a agregar (solo edición)
-    stockToRemove: '', // Cantidad a descontar (solo admin edición)
-    fechaVencimientoInput: '' // Fecha del lote que se está agregando
+    img: '', // <--- NUEVO CAMPO
+    // Campos Lotes/Vencimiento
+    stockToAdd: '', 
+    stockToRemove: '', 
+    fechaVencimientoInput: '' 
   });
 
   const [editingProductId, setEditingProductId] = useState(null);
@@ -66,21 +76,15 @@ function Products() {
   }, [isScanning]);
 
   // --- Funciones Auxiliares de Fechas ---
-  
-  // Obtiene la fecha de vencimiento más próxima de un producto basándose en sus lotes
   const getProximoVencimiento = (product) => {
     if (!product.historialLotes || product.historialLotes.length === 0) return null;
-    
-    // Filtramos lotes que tengan fecha válida
     const fechas = product.historialLotes
         .map(l => l.fechaVencimiento)
-        .filter(f => f) // que no sea null/undefined
-        .sort(); // Ordenar ascendente (la más vieja primero)
-        
+        .filter(f => f) 
+        .sort();
     return fechas.length > 0 ? fechas[0] : null;
   };
 
-  // Determina si hay alerta de vencimiento (menos de 30 días)
   const checkAlertaVencimiento = (fechaString) => {
     if (!fechaString) return false;
     const fechaVenc = new Date(fechaString);
@@ -90,12 +94,20 @@ function Products() {
     return diasRestantes <= 30;
   };
 
+  // 4. FUNCIÓN PARA MANEJAR SELECCIÓN DE IMAGEN
+  const handleImageChange = (e) => {
+    if (e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    }
+  };
+
   const openModalForAdd = () => {
     setEditingProductId(null);
     setFormData({ 
-        nombre: '', precio: '', stock: '', codigoDeBarras: '', costo: '', categoriaId: '', comisionEspecifica: '',
+        nombre: '', precio: '', stock: '', codigoDeBarras: '', costo: '', categoriaId: '', comisionEspecifica: '', img: '',
         stockToAdd: '', stockToRemove: '', fechaVencimientoInput: '' 
     });
+    setImageFile(null); // Reset imagen
     setError('');
     setIsModalOpen(true);
   };
@@ -105,11 +117,12 @@ function Products() {
     setFormData({ 
         ...product, 
         comisionEspecifica: product.comisionEspecifica || '',
-        // Reseteamos los campos de "acción"
+        img: product.img || '', // Cargar imagen existente
         stockToAdd: '', 
         stockToRemove: '',
-        fechaVencimientoInput: '' // El usuario debe ingresar la fecha del NUEVO stock
+        fechaVencimientoInput: '' 
     });
+    setImageFile(null); // Reset imagen nueva
     setError('');
     setIsModalOpen(true);
   };
@@ -124,100 +137,110 @@ function Products() {
       return;
     }
 
-    // Cálculo de Stock y Gestión de Lotes
-    let finalStock = Number(formData.stock) || 0;
-    let historialLotesActualizado = editingProductId 
-        ? (products.find(p => p.id === editingProductId)?.historialLotes || []) 
-        : [];
+    setIsUploading(true); // <--- BLOQUEAMOS BOTÓN
 
-    if (editingProductId) {
-        // --- MODO EDICIÓN ---
-        const toAdd = Number(formData.stockToAdd) || 0;
-        const toRemove = Number(formData.stockToRemove) || 0;
-
-        // Validación Admin para descontar
-        if (toRemove > 0 && !isAdmin) {
-            setError("Solo los administradores pueden descontar stock.");
-            return;
+    try {
+        // 5. LÓGICA DE SUBIDA DE IMAGEN
+        let imageUrl = formData.img; 
+        if (imageFile) {
+            const storageRef = ref(storage, `productos/${Date.now()}_${imageFile.name}`);
+            await uploadBytes(storageRef, imageFile);
+            imageUrl = await getDownloadURL(storageRef);
         }
 
-        // Si se agrega stock, es OBLIGATORIO poner fecha de vencimiento
-        if (toAdd > 0 && !formData.fechaVencimientoInput) {
-            setError("Si agregas stock, debes ingresar la fecha de vencimiento del nuevo lote.");
-            return;
-        }
+        // Cálculo de Stock y Gestión de Lotes
+        let finalStock = Number(formData.stock) || 0;
+        let historialLotesActualizado = editingProductId 
+            ? (products.find(p => p.id === editingProductId)?.historialLotes || []) 
+            : [];
 
-        // Cálculo matemático del nuevo stock
-        finalStock = finalStock + toAdd - toRemove;
+        if (editingProductId) {
+            // --- MODO EDICIÓN ---
+            const toAdd = Number(formData.stockToAdd) || 0;
+            const toRemove = Number(formData.stockToRemove) || 0;
 
-        if (finalStock < 0) {
-            setError("El stock no puede quedar en negativo.");
-            return;
-        }
+            if (toRemove > 0 && !isAdmin) {
+                setError("Solo los administradores pueden descontar stock.");
+                setIsUploading(false);
+                return;
+            }
 
-        // Si agregamos stock, guardamos el lote en el historial
-        if (toAdd > 0) {
+            if (toAdd > 0 && !formData.fechaVencimientoInput) {
+                setError("Si agregas stock, debes ingresar la fecha de vencimiento del nuevo lote.");
+                setIsUploading(false);
+                return;
+            }
+
+            finalStock = finalStock + toAdd - toRemove;
+
+            if (finalStock < 0) {
+                setError("El stock no puede quedar en negativo.");
+                setIsUploading(false);
+                return;
+            }
+
+            if (toAdd > 0) {
+                historialLotesActualizado.push({
+                    fechaIngreso: new Date().toISOString(),
+                    cantidad: toAdd,
+                    fechaVencimiento: formData.fechaVencimientoInput
+                });
+            }
+
+        } else {
+            // --- MODO CREACIÓN ---
+            if (!formData.fechaVencimientoInput) {
+                setError("Ingresa la fecha de vencimiento del stock inicial.");
+                setIsUploading(false);
+                return;
+            }
+            
+            finalStock = Number(formData.stock);
+            
             historialLotesActualizado.push({
                 fechaIngreso: new Date().toISOString(),
-                cantidad: toAdd,
+                cantidad: finalStock,
                 fechaVencimiento: formData.fechaVencimientoInput
             });
         }
-        // (Opcional) Si descontamos stock, podríamos marcar lotes como consumidos, 
-        // pero para este ejemplo solo ajustamos el total y mantenemos el historial de ingresos.
 
-    } else {
-        // --- MODO CREACIÓN ---
-        // En creación, el stock inicial es el primer lote
-        if (!formData.fechaVencimientoInput) {
-             setError("Ingresa la fecha de vencimiento del stock inicial.");
-             return;
-        }
-        
-        // El stock inicial viene del input "stock" en el form de creación
-        finalStock = Number(formData.stock);
-        
-        historialLotesActualizado.push({
-            fechaIngreso: new Date().toISOString(),
-            cantidad: finalStock,
-            fechaVencimiento: formData.fechaVencimientoInput
-        });
-    }
-
-    const productData = {
-      nombre: formData.nombre,
-      precio: Number(formData.precio),
-      costo: Number(formData.costo),
-      stock: finalStock, // Guardamos el total calculado
-      historialLotes: historialLotesActualizado, // Guardamos el array de fechas
-      codigoDeBarras: formData.codigoDeBarras || '',
-      categoriaId: formData.categoriaId,
-      comisionEspecifica: formData.comisionEspecifica ? Number(formData.comisionEspecifica) : null
-    };
+        const productData = {
+            nombre: formData.nombre,
+            precio: Number(formData.precio),
+            costo: Number(formData.costo),
+            stock: finalStock,
+            historialLotes: historialLotesActualizado,
+            codigoDeBarras: formData.codigoDeBarras || '',
+            categoriaId: formData.categoriaId,
+            comisionEspecifica: formData.comisionEspecifica ? Number(formData.comisionEspecifica) : null,
+            img: imageUrl // <--- GUARDAMOS URL DE IMAGEN
+        };
     
-    try {
-      if (editingProductId) {
-        await updateDoc(doc(db, 'productos', editingProductId), productData);
-      } else {
-        // Validaciones de duplicados al crear
-        const qNombre = query(collection(db, "productos"), where("nombre", "==", productData.nombre), limit(1));
-        if (!(await getDocs(qNombre)).empty) {
-          setError("Ya existe un producto con este nombre.");
-          return;
+        if (editingProductId) {
+            await updateDoc(doc(db, 'productos', editingProductId), productData);
+        } else {
+            const qNombre = query(collection(db, "productos"), where("nombre", "==", productData.nombre), limit(1));
+            if (!(await getDocs(qNombre)).empty) {
+                setError("Ya existe un producto con este nombre.");
+                setIsUploading(false);
+                return;
+            }
+            if (productData.codigoDeBarras) {
+                const qCodigo = query(collection(db, "productos"), where("codigoDeBarras", "==", productData.codigoDeBarras), limit(1));
+                if (!(await getDocs(qCodigo)).empty) {
+                setError("Ya existe un producto con este código de barras.");
+                setIsUploading(false);
+                return;
+                }
+            }
+            await addDoc(collection(db, 'productos'), productData);
         }
-        if (productData.codigoDeBarras) {
-          const qCodigo = query(collection(db, "productos"), where("codigoDeBarras", "==", productData.codigoDeBarras), limit(1));
-          if (!(await getDocs(qCodigo)).empty) {
-            setError("Ya existe un producto con este código de barras.");
-            return;
-          }
-        }
-        await addDoc(collection(db, 'productos'), productData);
-      }
-      setIsModalOpen(false);
+        setIsModalOpen(false);
     } catch (err) {
       console.error("Error al guardar:", err);
       setError("No se pudo guardar el producto.");
+    } finally {
+        setIsUploading(false);
     }
   };
 
@@ -337,6 +360,8 @@ function Products() {
         <table className="min-w-full text-sm divide-y divide-gray-200">
           <thead className="bg-gray-100">
             <tr>
+              {/* COLUMNA IMAGEN */}
+              <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Img</th>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Nombre</th>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Categoría</th>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Vencimiento</th>
@@ -347,7 +372,7 @@ function Products() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedProducts.length === 0 ? (
-                <tr><td colSpan="6" className="px-6 py-4 text-center text-gray-500 italic">No se encontraron productos.</td></tr>
+                <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500 italic">No se encontraron productos.</td></tr>
             ) : (
                 paginatedProducts.map((product) => {
                   const proximoVenc = getProximoVencimiento(product);
@@ -355,10 +380,20 @@ function Products() {
                   
                   return (
                   <tr key={product.id} className="hover:bg-gray-50">
+                    {/* CELDA IMAGEN */}
+                    <td className="px-6 py-4">
+                        {product.img ? (
+                            <img src={product.img} alt={product.nombre} className="w-12 h-12 object-cover rounded-md border" />
+                        ) : (
+                            <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center text-gray-400">
+                                <ImageIcon />
+                            </div>
+                        )}
+                    </td>
+
                     <td className="px-6 py-4 text-gray-800 font-medium">{product.nombre}</td>
                     <td className="px-6 py-4 text-gray-500">{getCategory(product.categoriaId)?.nombre || 'N/A'}</td>
                     
-                    {/* Columna Vencimiento */}
                     <td className="px-6 py-4">
                         {proximoVenc ? (
                             <span className={`px-2 py-1 rounded text-xs font-bold ${esAlerta ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-800'}`}>
@@ -409,6 +444,29 @@ function Products() {
             
             <form onSubmit={handleSave} className="space-y-4">
               
+              {/* --- SECCIÓN IMAGEN --- */}
+              <div className="flex items-center space-x-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="w-24 h-24 bg-white border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    {imageFile ? (
+                        <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-full h-full object-cover" />
+                    ) : formData.img ? (
+                        <img src={formData.img} alt="Actual" className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="text-xs text-gray-400 text-center p-1">Sin imagen</span>
+                    )}
+                </div>
+                <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Imagen del Producto</label>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageChange}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Formatos recomendados: JPG, PNG.</p>
+                </div>
+              </div>
+
               {/* --- DATOS GENERALES --- */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -425,7 +483,7 @@ function Products() {
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                 <div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Costo *</label>
                   <input type="number" step="0.01" value={formData.costo} onChange={(e) => setFormData({ ...formData, costo: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
                 </div>
@@ -483,14 +541,14 @@ function Products() {
               ) : (
                 // MODO CREACIÓN
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 grid grid-cols-2 gap-4">
-                     <div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Stock Inicial *</label>
                         <input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
-                     </div>
-                     <div>
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Vencimiento *</label>
                         <input type="date" value={formData.fechaVencimientoInput} onChange={(e) => setFormData({ ...formData, fechaVencimientoInput: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
-                     </div>
+                      </div>
                 </div>
               )}
 
@@ -498,8 +556,8 @@ function Products() {
               
               <div className="flex justify-end pt-4 space-x-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancelar</button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border rounded-md hover:bg-indigo-700">
-                    {editingProductId ? 'Actualizar Producto' : 'Crear Producto'}
+                <button type="submit" disabled={isUploading} className={`px-4 py-2 text-sm font-medium text-white border rounded-md ${isUploading ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                    {isUploading ? 'Subiendo...' : (editingProductId ? 'Actualizar Producto' : 'Crear Producto')}
                 </button>
               </div>
             </form>
