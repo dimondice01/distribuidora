@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase.js';
-
+import Button from './Button'; // Asegúrate de la ruta correcta
 const PromotionModal = ({ onClose }) => {
     const [step, setStep] = useState(1);
     const [promoType, setPromoType] = useState('');

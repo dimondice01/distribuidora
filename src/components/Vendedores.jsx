@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase.js';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import Button from './Button'; // Asegúrate de la ruta correcta
 
 // --- Iconos SVG ---
 const EditIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
 const DeleteIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
-const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
+const PlusIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
+const PhoneIcon = () => <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>;
 
 const ROLES = {
   ADMIN: 'Administrador',
@@ -18,7 +20,8 @@ function Vendedores() {
   const [vendedores, setVendedores] = useState([]);
   const [zonas, setZonas] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ nombreCompleto: '', username: '', email: '', password: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
+  // 1. ESTADO ACTUALIZADO: Agregado campo telefono
+  const [formData, setFormData] = useState({ nombreCompleto: '', username: '', email: '', password: '', telefono: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
   const [editingVendedorId, setEditingVendedorId] = useState(null);
   const [error, setError] = useState('');
   const [vendedorToDelete, setVendedorToDelete] = useState(null);
@@ -49,18 +52,21 @@ function Vendedores() {
 
   const openModalForAdd = () => {
     setEditingVendedorId(null);
-    setFormData({ nombreCompleto: '', username: '', email: '', password: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
+    // 2. RESET FORM: Incluye telefono vacío
+    setFormData({ nombreCompleto: '', username: '', email: '', password: '', telefono: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
     setError('');
     setIsModalOpen(true);
   };
 
   const openModalForEdit = (vendedor) => {
     setEditingVendedorId(vendedor.id);
+    // 3. CARGA EDITAR: Carga el telefono existente
     setFormData({
       nombreCompleto: vendedor.nombreCompleto,
       username: vendedor.username,
       email: vendedor.email,
       password: '',
+      telefono: vendedor.telefono || '', // Carga o vacío
       rango: vendedor.rango || ROLES.VENDEDOR,
       zonasAsignadas: vendedor.zonasAsignadas || []
     });
@@ -83,16 +89,18 @@ function Vendedores() {
     setError('');
 
     if (!formData.nombreCompleto || !formData.username || !formData.email || !formData.rango) {
-      setError("Por favor, completa todos los campos.");
+      setError("Por favor, completa todos los campos obligatorios.");
       return;
     }
     
     try {
       if (editingVendedorId) {
         const vendedorRef = doc(db, 'vendedores', editingVendedorId);
+        // 4. UPDATE: Guarda el teléfono al editar
         await updateDoc(vendedorRef, {
           nombreCompleto: formData.nombreCompleto,
           username: formData.username,
+          telefono: formData.telefono,
           rango: formData.rango,
           zonasAsignadas: formData.zonasAsignadas
         });
@@ -106,15 +114,15 @@ function Vendedores() {
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const newUser = userCredential.user;
 
-        // 2. CORRECCIÓN: Usar setDoc para crear el documento con el UID del usuario como ID
+        // 5. CREATE: Guarda el teléfono al crear
         await setDoc(doc(db, 'vendedores', newUser.uid), {
           nombreCompleto: formData.nombreCompleto,
           username: formData.username,
           email: formData.email,
+          telefono: formData.telefono,
           rango: formData.rango,
           zonasAsignadas: formData.zonasAsignadas,
           firebaseAuthUid: newUser.uid
-          // Ya no es necesario guardar el campo 'uid' adentro del documento
         });
       }
       setIsModalOpen(false);
@@ -194,10 +202,9 @@ function Vendedores() {
     <div className="p-4 bg-gray-50 rounded-lg min-h-[60vh]">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-700">Gestión de Vendedores</h2>
-        <button onClick={openModalForAdd} className="px-4 py-2 font-semibold text-white bg-indigo-600 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all flex items-center">
-            <PlusIcon className="w-4 h-4 mr-1"/>
+        <Button onClick={openModalForAdd} icon={<PlusIcon className="w-5 h-5"/>}>
             Agregar Vendedor
-        </button>
+        </Button>
       </div>
       
       {/* Filtro de Búsqueda */}
@@ -213,7 +220,7 @@ function Vendedores() {
           <thead className="bg-gray-100">
             <tr>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Nombre Completo</th>
-              <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Email / Usuario</th>
+              <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Contacto (Email / Tel)</th>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Rango</th>
               <th className="px-6 py-3 font-semibold text-left text-gray-600 uppercase">Zonas Asignadas</th>
               <th className="px-6 py-3 font-semibold text-center text-gray-600 uppercase">Acciones</th>
@@ -227,9 +234,12 @@ function Vendedores() {
                 ) : (
                     paginatedVendedores.map((vendedor) => (
                         <tr key={vendedor.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 text-gray-800">{vendedor.nombreCompleto}</td>
+                            <td className="px-6 py-4 text-gray-800 font-medium">{vendedor.nombreCompleto}</td>
                             <td className="px-6 py-4 text-gray-600">
                                 <p>{vendedor.email}</p>
+                                <p className="text-xs text-gray-400 flex items-center mt-1">
+                                    <PhoneIcon /> {vendedor.telefono || 'Sin teléfono'}
+                                </p>
                                 <p className="text-xs text-gray-400">@{vendedor.username}</p>
                             </td>
                             <td className="px-6 py-4">{getRoleBadge(vendedor.rango)}</td>
@@ -290,22 +300,37 @@ function Vendedores() {
                   </select>
                 </div>
               </div>
+              
+              {/* SECCIÓN DE CONTACTO: EMAIL Y TELÉFONO */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border rounded-md" required disabled={!!editingVendedorId} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (WhatsApp)</label>
+                  <input 
+                    type="tel" 
+                    placeholder="Ej: 5493804..."
+                    value={formData.telefono} 
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} 
+                    className="w-full px-3 py-2 border rounded-md bg-slate-50" 
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de Usuario</label>
                   <input type="text" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border rounded-md" required disabled={!!editingVendedorId} />
-                </div>
+                {!editingVendedorId && (
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
+                    </div>
+                )}
               </div>
-              {!editingVendedorId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-                  <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2 border rounded-md" required/>
-                </div>
-              )}
 
               {/* Selector de Zonas */}
               <div>

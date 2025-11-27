@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom'; 
+import { useParams, useSearchParams } from 'react-router-dom'; // 1. IMPORTAMOS useSearchParams
 import { db } from '../firebase'; 
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore'; // 2. IMPORTAMOS doc y getDoc
 
 // --- Iconos Estilo iOS ---
 const CartIcon = ({ count }) => (
@@ -23,9 +23,11 @@ const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" view
 const CloseIcon = () => <svg className="w-8 h-8 text-gray-500 bg-gray-100 rounded-full p-1.5 hover:bg-gray-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 const GiftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clipRule="evenodd" /><path d="M9 11H3v5a2 2 0 002 2h4v-7zM11 18h4a2 2 0 002-2v-5h-6v7z" /></svg>;
 const FireIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.45-.412-1.725a1 1 0 00-1.457-.895c-1.387.634-2.182 2.055-2.019 3.789.164 1.734 1.391 3.158 2.793 3.975C7.548 16.049 9.73 16.5 11.976 15.46c2.246-1.04 3.596-3.507 3.35-5.854-.123-1.174-.842-2.165-1.91-2.719a5.838 5.838 0 00-1.021-.334z" clipRule="evenodd" /></svg>;
+const UserCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>; // Icono Vendedor
 
 export default function CatalogoPublico() {
   const { lista } = useParams(); 
+  const [searchParams] = useSearchParams(); // 3. LEEMOS PARAMETROS URL
   
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -35,8 +37,11 @@ export default function CatalogoPublico() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false); // ✅ Estado Modal Promos
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // --- LÓGICA VENDEDOR B2B ---
+  const [vendorData, setVendorData] = useState(null); // { nombre: '', telefono: '' }
 
   // --- Modal Cantidad ---
   const [qtyModalOpen, setQtyModalOpen] = useState(false);
@@ -44,7 +49,7 @@ export default function CatalogoPublico() {
   const [qtyInputValue, setQtyInputValue] = useState('');
   const qtyInputRef = useRef(null);
 
-  // 1. Cargar Datos
+  // 1. Cargar Datos Generales
   useEffect(() => {
     const unsubProducts = onSnapshot(collection(db, 'productos'), (snap) => {
       setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -64,6 +69,29 @@ export default function CatalogoPublico() {
 
     return () => { unsubProducts(); unsubCategories(); unsubPromos(); };
   }, []);
+
+  // 4. DETECTAR Y CARGAR VENDEDOR (B2B)
+  useEffect(() => {
+      const vendorId = searchParams.get('v'); // Buscamos ?v=ID_VENDEDOR
+      if (vendorId) {
+          const fetchVendor = async () => {
+              try {
+                  const docRef = doc(db, 'vendedores', vendorId);
+                  const docSnap = await getDoc(docRef);
+                  if (docSnap.exists()) {
+                      const data = docSnap.data();
+                      setVendorData({
+                          nombre: data.nombreCompleto,
+                          telefono: data.telefono || '' // Prioridad al teléfono guardado
+                      });
+                  }
+              } catch (error) {
+                  console.error("Error cargando vendedor:", error);
+              }
+          };
+          fetchVendor();
+      }
+  }, [searchParams]);
 
   // 2. Helper de Precio Base
   const getProductBasePrice = (product) => {
@@ -87,11 +115,9 @@ export default function CatalogoPublico() {
     return { finalPrice, originalPrice: basePrice, isPromo };
   };
 
-  // ✅ 3. Helper para Badge de Promoción
+  // Helper para Badge de Promoción
   const getProductPromoBadge = (product) => {
-      // Buscar si el producto participa en alguna promo compleja
       const promo = promotions.find(p => p.productoIds?.includes(product.id));
-      
       if (!promo) return null;
 
       if (promo.tipo === 'LLEVA_X_PAGA_Y') {
@@ -103,11 +129,10 @@ export default function CatalogoPublico() {
       if (promo.tipo === 'REGALO_POR_COMPRA') {
           return { text: `Regalo x ${promo.condicion?.cantidadMinima}`, color: 'bg-purple-500', icon: '🎁' };
       }
-      // Precio especial ya se maneja en getProductBasePrice con "OFERTA"
       return null;
   };
 
-  // 4. Lógica de Regalos (Carrito)
+  // Lógica de Regalos (Carrito)
   const calculatedGifts = useMemo(() => {
     const gifts = [];
     promotions.forEach(promo => {
@@ -131,7 +156,7 @@ export default function CatalogoPublico() {
     return gifts;
   }, [cart, promotions, products]);
 
-  // 5. Lógica de Totales
+  // Lógica de Totales
   const cartTotals = useMemo(() => {
     let subTotalBruto = 0;
     const itemDiscounts = {}; 
@@ -179,7 +204,7 @@ export default function CatalogoPublico() {
     return { subTotalBruto, totalFinal: subTotalBruto - totalDescuentos, totalDescuentos, itemDiscounts };
   }, [cart, products, promotions, lista]);
 
-  // 6. Filtros
+  // Filtros
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
@@ -214,7 +239,7 @@ export default function CatalogoPublico() {
     const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
     if (totalItems === 0) return;
 
-    let message = `*¡Hola! Quiero hacer un pedido${lista ? ` (Lista: ${lista})` : ''}:*\n\n`;
+    let message = `*¡Hola${vendorData ? ' ' + vendorData.nombre : ''}! Quiero hacer un pedido${lista ? ` (Lista: ${lista})` : ''}:*\n\n`;
     const itemsForLink = [];
 
     Object.keys(cart).forEach(id => {
@@ -243,10 +268,15 @@ export default function CatalogoPublico() {
     message += `\n\n📍 *[TOCA AQUÍ PARA CARGAR EN APP]* 👇\n`;
     
     const jsonPayload = JSON.stringify(itemsForLink);
-    const webLink = `${window.location.origin}/abrir-pedido?data=${encodeURIComponent(jsonPayload)}`;
+    // 5. PRESERVAR VENDEDOR: Incluimos el ?v=ID también en el link de deep linking (opcional, por si quieres trackearlo luego)
+    const vendorParam = searchParams.get('v') ? `&v=${searchParams.get('v')}` : '';
+    const webLink = `${window.location.origin}/abrir-pedido?data=${encodeURIComponent(jsonPayload)}${vendorParam}`;
     message += webLink;
 
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    // 6. DESTINO DINÁMICO: Si hay teléfono de vendedor, úsalo. Si no, genérico.
+    const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; // Limpia caracteres no numéricos
+    const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
+    
     window.open(whatsappUrl, '_blank');
   };
 
@@ -264,9 +294,18 @@ export default function CatalogoPublico() {
       <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-100/50 transition-all duration-300">
         <div className="max-w-5xl mx-auto px-4 pt-4 pb-2">
             <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Catálogo</h1>
-                    {lista && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide border border-blue-100">{lista}</span>}
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Catálogo</h1>
+                        {lista && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide border border-blue-100">{lista}</span>}
+                    </div>
+                    {/* 7. VISUALIZACIÓN DEL VENDEDOR */}
+                    {vendorData && (
+                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5 animate-fade-in">
+                            <UserCheckIcon className="w-3 h-3 text-green-500"/> 
+                            Atendido por: <span className="text-gray-800 font-bold">{vendorData.nombre}</span>
+                        </p>
+                    )}
                 </div>
                 <button onClick={() => setIsCartOpen(true)}>
                     <CartIcon count={Object.values(cart).reduce((a,b)=>a+b, 0)} />
@@ -286,7 +325,6 @@ export default function CatalogoPublico() {
 
             {/* Categorías y Botón Promociones */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 items-center">
-                {/* ✅ Botón Pestaña Promociones */}
                 <button 
                     onClick={() => setIsPromoModalOpen(true)}
                     className="flex items-center gap-1 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all shadow-sm bg-gradient-to-r from-orange-400 to-pink-500 text-white hover:opacity-90 active:scale-95 border border-transparent"
@@ -320,7 +358,7 @@ export default function CatalogoPublico() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredProducts.map(product => {
                 const { finalPrice, originalPrice, isPromo } = getProductBasePrice(product);
-                const promoBadge = getProductPromoBadge(product); // ✅ Badge complejo
+                const promoBadge = getProductPromoBadge(product); 
                 const qty = cart[product.id] || 0;
 
                 return (
@@ -339,13 +377,11 @@ export default function CatalogoPublico() {
                             </div>
                         )}
                         
-                        {/* ✅ Badge de Promoción Dinámico */}
                         {promoBadge && (
                             <div className={`absolute top-2 left-2 ${promoBadge.color} text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-95 z-10`}>
                                 {promoBadge.text}
                             </div>
                         )}
-                        {/* Oferta de Precio (si no hay promo compleja o conviven) */}
                         {!promoBadge && isPromo && (
                             <div className="absolute top-2 left-2 bg-amber-400 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-95 z-10">
                                 OFERTA
@@ -380,7 +416,7 @@ export default function CatalogoPublico() {
         {filteredProducts.length === 0 && <div className="text-center py-20 text-gray-400 font-medium">No se encontraron productos.</div>}
       </div>
 
-      {/* --- MODAL PROMOS VIGENTES (Nueva Pestaña) --- */}
+      {/* --- MODAL PROMOS VIGENTES --- */}
       {isPromoModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
               <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 relative max-h-[80vh] flex flex-col">
@@ -521,7 +557,8 @@ export default function CatalogoPublico() {
                 disabled={Object.keys(cart).length === 0}
                 className={`w-full py-4 rounded-2xl font-bold text-white text-lg shadow-xl shadow-green-200/50 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${Object.keys(cart).length === 0 ? 'bg-gray-100 cursor-not-allowed text-gray-400 shadow-none' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:to-emerald-700'}`}
               >
-                Confirmar por WhatsApp
+                {/* 8. BOTÓN PERSONALIZADO */}
+                {vendorData ? `Enviar a ${vendorData.nombre}` : 'Confirmar por WhatsApp'}
               </button>
             </div>
           </div>
@@ -530,5 +567,3 @@ export default function CatalogoPublico() {
     </div>
   );
 }
-
-// Icono de Fuego (para el botón de promos)

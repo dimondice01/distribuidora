@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase.js';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, orderBy, query } from 'firebase/firestore';
+import Button from './Button'; // Asegúrate de la ruta correcta
 
 // --- Iconos SVG ---
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
@@ -83,13 +84,9 @@ function Zonas() {
         <div className="bg-white p-6 rounded-lg shadow min-h-[70vh]">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-gray-700">Gestión de Zonas</h2>
-                <button 
-                    onClick={() => openModal()} 
-                    className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-indigo-600 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-                >
-                    <PlusIcon />
-                    Agregar Zona
-                </button>
+                <Button onClick={() => openModal()} icon={<PlusIcon />}>
+    Agregar Zona
+</Button>
             </div>
 
             <div className="overflow-x-auto">

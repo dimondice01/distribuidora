@@ -11,7 +11,7 @@ import {
   doc 
 } from 'firebase/firestore';
 import { toast } from 'react-toastify'; 
-
+import Button from './Button'; // Asegúrate de la ruta correcta
 function Rubros() {
   const [rubros, setRubros] = useState([]);
   
@@ -167,12 +167,9 @@ function Rubros() {
 
           {/* Botón (SOLO GUARDAR) */}
           <div className="flex space-x-2 self-end"> 
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white p-3 rounded-md font-semibold hover:bg-blue-700 transition duration-200 h-12"
-            >
-              Guardar
-            </button>
+            <Button type="submit" className="w-full">
+  Guardar
+</Button>
           </div>
         </div>
       </form>

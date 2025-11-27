@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
-import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 
 // Inicializamos Cloud Functions
@@ -21,6 +21,8 @@ const EditIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" w
 const EyeIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
 const TrashIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
 const SettingsIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+const AlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+const PackageIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
 
 // --- UTILIDADES ---
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
@@ -36,7 +38,7 @@ const printHTML = (htmlContent) => {
     }
 };
 
-// --- GENERACIÓN DE PDFS (INTACTOS) ---
+// --- GENERACIÓN DE PDFS ---
 const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     const productSummary = new Map();
     invoices.forEach(invoice => {
@@ -80,7 +82,9 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
         </div>`;
 };
 
+// --- REPORTE DE RENDICIÓN (AUTOMÁTICO) ---
 const generateSettlementReportHTML = (route, invoices) => {
+    // 1. Calculamos TOTALES FINANCIEROS
     const resumen = invoices.reduce((acc, fac) => {
         acc.efectivo += fac.pagoEfectivo || 0;
         acc.transferencia += fac.pagoTransferencia || 0;
@@ -89,6 +93,7 @@ const generateSettlementReportHTML = (route, invoices) => {
         return acc;
     }, { efectivo: 0, transferencia: 0, saldoPendiente: 0, totalVenta: 0 });
 
+    // 2. Calculamos DEVOLUCIONES DE STOCK
     const devolucionesSummary = new Map();
     invoices.forEach(invoice => {
         if (invoice.estado === 'Anulada') {
@@ -104,6 +109,7 @@ const generateSettlementReportHTML = (route, invoices) => {
                 const original = item.originalQuantity !== undefined ? item.originalQuantity : item.quantity;
                 const final = item.quantity;
                 const diff = original - final;
+                
                 if (diff > 0) {
                     const key = item.productId || item.nombre;
                     const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
@@ -113,15 +119,59 @@ const generateSettlementReportHTML = (route, invoices) => {
         }
     });
 
-    const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
+    const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight:bold;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
+    
+    // 3. Detalle de facturas
     const facturasRows = invoices.map(inv => `<tr><td style="padding: 8px; border: 1px solid #ddd;">${inv.clienteNombre}</td><td style="padding: 8px; border: 1px solid #ddd;">${inv.estado}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.totalVenta)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoEfectivo || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoTransferencia || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: red;">${formatCurrency(inv.saldoPendiente)}</td></tr>`).join('');
 
-    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;} th, td{padding: 10px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #7f8c8d;} .box { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #fafafa; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; }</style></head><body>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha Cierre: ${new Date().toLocaleString('es-AR')}</p></div></div>
-        <h3>1. Resumen Financiero</h3><div class="box"><table style="margin:0;"><tr><td>Total Rendido en Efectivo:</td><td class="amount success" style="font-size: 16px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td>Total Rendido en Transferencias:</td><td class="amount success" style="font-size: 16px;">${formatCurrency(resumen.transferencia)}</td></tr><tr><td>Deuda (Saldo Pendiente):</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #ddd;"><td><strong>TOTAL GENERAL RUTA:</strong></td><td class="amount" style="font-size: 18px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr></table></div>
-        <h3>2. Control de Mercadería (Reingreso al Stock)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">Cant. Devuelta</th><th>Producto</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d;">No se registraron devoluciones.</p>'}
-        <h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efectivo</th><th class="amount">Transf.</th><th class="amount">Saldo</th></tr></thead><tbody>${facturasRows}</tbody></table>
-        <div style="margin-top: 50px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%;"><p style="margin-top: 40px; border-top: 1px solid #000;">Firma Responsable Caja</p></div><div style="text-align: center; width: 40%;"><p style="margin-top: 40px; border-top: 1px solid #000;">Firma Repartidor</p></div></div></body></html>`;
+    return `<html>
+        <head>
+            <title>Rendición - ${route.nombre}</title>
+            <style>
+                body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} 
+                h1, h2, h3 {color: #2c3e50;} 
+                table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;} 
+                th, td{padding: 10px; text-align: left; border-bottom: 1px solid #eee;} 
+                th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #7f8c8d;} 
+                .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } 
+                .amount { text-align: right; } 
+                .danger { color: #e74c3c; } 
+                .success { color: #27ae60; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                <div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div>
+                <div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div>
+            </div>
+
+            <h3>1. DINERO A ENTREGAR (CAJA)</h3>
+            <div class="box">
+                <table style="margin:0;">
+                    <tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr>
+                    <tr><td style="font-size: 14px;">TRANSFERENCIAS (Banco):</td><td class="amount" style="font-size: 18px;">${formatCurrency(resumen.transferencia)}</td></tr>
+                    <tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr>
+                    <tr style="border-top: 2px solid #333; background-color: #fff;">
+                        <td><strong>TOTAL VENTA RUTA:</strong></td>
+                        <td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>
+            ${devolucionesRows.length > 0 
+                ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` 
+                : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}
+
+            <h3>3. Detalle por Cliente</h3>
+            <table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efectivo</th><th class="amount">Transf.</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table>
+            
+            <div style="margin-top: 60px; display: flex; justify-content: space-between;">
+                <div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div>
+                <div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div>
+            </div>
+        </body>
+    </html>`;
 };
 
 // --- HOOK DE DATOS ---
@@ -316,7 +366,8 @@ function Rutas() {
     const [activeTab, setActiveTab] = useState('planificacion');
     const [plannerReadOnly, setPlannerReadOnly] = useState(false); // Nuevo estado para modo lectura
 
-    const routesQuery = useMemo(() => query(collection(db, 'rutas'), where('estado', '!=', 'Archivada'), orderBy('fechaCreacion', 'desc')), []);
+    // CONSULTA CORREGIDA: TRAE TODO LO QUE NO SEA 'Archivada' PERO AÑADIREMOS UN FILTRO EN MEMORIA PARA 'Archivada' EN EL TAB CORRESPONDIENTE
+    const routesQuery = useMemo(() => query(collection(db, 'rutas'), orderBy('fechaCreacion', 'desc')), []);
     const invoicesQuery = useMemo(() => query(collection(db, 'ventas'), where('estado', '!=', 'Archivada')), []);
     const vendorsQuery = useMemo(() => query(collection(db, 'vendedores')), []);
     const clientesQuery = useMemo(() => query(collection(db, 'clientes')), []);
@@ -412,19 +463,27 @@ function Rutas() {
         printHTML(`<html><body>${allPrintContent}</body></html>`);
     };
 
+    // --- MODIFICACIÓN CRÍTICA: CHECK DE EXISTENCIA DE FACTURAS ANTES DE ACTUALIZAR ---
     const handleCancelRoute = async (routeToCancel) => {
-        if (!window.confirm(`¿ATENCIÓN: Anular la ruta "${routeToCancel.nombre}"?\n\nTodas las facturas volverán a estado 'Pendiente de Entrega'.`)) return;
+        if (!window.confirm(`¿ATENCIÓN: Anular y ELIMINAR la ruta "${routeToCancel.nombre}"?\n\nLas facturas volverán a estado 'Pendiente de Entrega' y la ruta desaparecerá.`)) return;
         try {
             await runTransaction(db, async (transaction) => {
                 const routeRef = doc(db, 'rutas', routeToCancel.id);
-                transaction.update(routeRef, { estado: 'Anulada', fechaAnulacion: Timestamp.now() });
+                
+                // 1. Liberar facturas (CON CHECK DE EXISTENCIA)
                 for (const facturaRef of (routeToCancel.facturas || [])) {
                     const invoiceRef = doc(db, 'ventas', facturaRef.id);
-                    transaction.update(invoiceRef, { estado: 'Pendiente de Entrega', rutaId: null });
+                    const docSnap = await transaction.get(invoiceRef); // Verificar si existe
+                    if (docSnap.exists()) {
+                        transaction.update(invoiceRef, { estado: 'Pendiente de Entrega', rutaId: null });
+                    }
                 }
+                
+                // 2. Eliminar la ruta físicamente
+                transaction.delete(routeRef); 
             });
-            alert("Ruta anulada correctamente.");
-        } catch (error) { console.error(error); alert("Error al anular."); }
+            alert("Ruta anulada y eliminada correctamente.");
+        } catch (error) { console.error(error); alert("Error al anular: " + error.message); }
     };
 
     const handleViewRoute = (route) => {
@@ -443,10 +502,11 @@ function Rutas() {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
     }
 
+    // --- FILTROS DE ESTADOS ---
     const planificadas = routes.filter(r => r.estado === 'Planificada');
     const enCurso = routes.filter(r => r.estado === 'En Curso');
-    const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda');
-    const anuladas = routes.filter(r => r.estado === 'Anulada'); 
+    const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda'); // Rutas listas para rendir o rendidas parcialmente
+    const archivadas = routes.filter(r => r.estado === 'Archivada'); // Rutas ya cerradas/rendidas
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen font-sans">
@@ -466,7 +526,7 @@ function Rutas() {
                     <TabButton name="planificacion" activeTab={activeTab} onClick={setActiveTab}>Planificación ({planificadas.length})</TabButton>
                     <TabButton name="en_curso" activeTab={activeTab} onClick={setActiveTab}>En Curso ({enCurso.length})</TabButton>
                     <TabButton name="rendicion" activeTab={activeTab} onClick={setActiveTab}>Rendición ({rendicion.length})</TabButton>
-                    <TabButton name="anuladas" activeTab={activeTab} onClick={setActiveTab}>Histórico</TabButton>
+                    <TabButton name="anuladas" activeTab={activeTab} onClick={setActiveTab}>Histórico ({archivadas.length})</TabButton>
                 </div>
             </div>
 
@@ -504,9 +564,12 @@ function Rutas() {
 
                 {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} />}
                 
-                {activeTab === 'anuladas' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {anuladas.map(route => <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} allInvoices={enrichedInvoices} readOnly />)}
+                {activeTab === 'anuladas' && ( // AHORA MUESTRA HISTORIAL DE ARCHIVADAS (RENDIDAS)
+                    <div className="space-y-4">
+                         {/* Reutilizamos el TabContentRendicion porque ya tiene la lógica de mostrar totales y reporte,
+                             pero filtramos solo las archivadas */}
+                        <TabContentRendicion routes={archivadas} allInvoices={enrichedInvoices} />
+                        {archivadas.length === 0 && <EmptyState message="No hay historial de rutas rendidas." />}
                     </div>
                 )}
             </div>
@@ -563,6 +626,7 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
         'En Curso': { color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
         'Completada': { color: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
         'Adeuda': { color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
+        'Archivada': { color: 'bg-gray-100 text-gray-700', dot: 'bg-gray-500' }, // NUEVO ESTADO
         'Anulada': { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
     };
     const status = statusConfig[estado] || statusConfig['Planificada'];
@@ -583,12 +647,13 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                 <p className="text-xs text-gray-500 font-medium flex items-center gap-1"><TruckIcon className="w-3 h-3"/> {repartidorNombre || 'Sin asignar'}</p>
             </div>
 
-            {/* Barra de Progreso Minimalista */}
+            {/* Barra de Progreso Minimalista (ACTUALIZADA: 1/10) */}
             {(estado === 'En Curso' || estado === 'Completada' || estado === 'Adeuda') && (
                 <div className="mt-6 mb-2">
                     <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1.5">
                         <span>PROGRESO</span>
-                        <span>{Math.round(liveStats.progress)}%</span>
+                        {/* CAMBIO SOLICITADO: Mostrar Fracción en lugar de Porcentaje */}
+                        <span>{liveStats.completed} / {liveStats.total}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-700 ease-out ${status.dot}`} style={{width: `${liveStats.progress}%`}}></div>
@@ -605,7 +670,7 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                     <button onClick={onEdit} title="Editar Ruta" className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm border border-yellow-100">
                         <EditIcon className="w-5 h-5"/>
                     </button>
-                    <button onClick={onCancel} title="Anular" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100">
+                    <button onClick={onCancel} title="Anular y Eliminar" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100">
                         <TrashIcon className="w-5 h-5"/>
                     </button>
                 </div>
@@ -620,23 +685,29 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
     );
 };
 
-// --- COMPONENTE RENDICIÓN (MESA DE CONTROL CLEAN) ---
+// --- COMPONENTE RENDICIÓN REDISEÑADO (AUTOMÁTICO) ---
 const TabContentRendicion = ({ routes, allInvoices }) => {
     const [expandedRouteId, setExpandedRouteId] = useState(null);
-    const [blindCounts, setBlindCounts] = useState({}); 
-
-    const handleBlindCountChange = (routeId, field, value) => {
-        setBlindCounts(prev => ({...prev, [routeId]: { ...prev[routeId], [field]: parseFloat(value) || 0 }}));
-    };
 
     const handleArchiveRoute = async (route) => {
-        const counts = blindCounts[route.id] || { efectivo: 0, transferencia: 0 };
-        if (!window.confirm(`¿Confirmar cierre de ruta?\n\nEsta acción es irreversible y actualizará el stock de devoluciones.`)) return;
+        if (!window.confirm(`¿Confirmar cierre de ruta "${route.nombre}"?\n\nSe archivará la ruta y se liberará al repartidor.`)) return;
         try {
-            await updateDoc(doc(db, 'rutas', route.id), { estado: 'Archivada', fechaCierre: Timestamp.now(), rendicionFinal: counts });
+            await updateDoc(doc(db, 'rutas', route.id), { 
+                estado: 'Archivada', 
+                fechaCierre: Timestamp.now() 
+            });
             alert("Ruta cerrada y archivada.");
         } catch (e) { console.error(e); alert("Error al cerrar."); }
     };
+
+    // --- NUEVA FUNCIÓN PARA BORRAR HISTORIAL ---
+    const handleDeleteArchivedRoute = async (routeId) => {
+        if(!window.confirm("¿Eliminar este registro del historial? Esta acción es irreversible.")) return;
+        try {
+            await deleteDoc(doc(db, 'rutas', routeId));
+            // No es necesario alerta si se borra de la UI automáticamente por el listener
+        } catch(e) { console.error(e); alert("Error al eliminar."); }
+    }
 
     return (
         <div className="space-y-4 animate-fade-in">
@@ -645,25 +716,52 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                 const totals = routeInvoices.reduce((acc, i) => ({
                     efectivo: acc.efectivo + (i.pagoEfectivo || 0),
                     transferencia: acc.transferencia + (i.pagoTransferencia || 0),
-                    pendiente: acc.pendiente + (i.saldoPendiente || 0)
-                }), { efectivo: 0, transferencia: 0, pendiente: 0 });
+                    pendiente: acc.pendiente + (i.saldoPendiente || 0),
+                    total: acc.total + (i.totalVenta || 0)
+                }), { efectivo: 0, transferencia: 0, pendiente: 0, total: 0 });
+
+                // --- CALCULO AUTOMATICO DE DEVOLUCIONES PARA UI ---
+                const devolucionesSummary = new Map();
+                routeInvoices.forEach(invoice => {
+                    if (invoice.estado === 'Anulada') {
+                        (invoice.items || []).forEach(item => {
+                            const qty = item.originalQuantity || item.quantity;
+                            if (!qty) return;
+                            const key = item.productId || item.nombre;
+                            const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
+                            devolucionesSummary.set(key, { ...existing, quantity: existing.quantity + qty });
+                        });
+                    } else {
+                        (invoice.items || []).forEach(item => {
+                            const original = item.originalQuantity !== undefined ? item.originalQuantity : item.quantity;
+                            const final = item.quantity;
+                            const diff = original - final;
+                            if (diff > 0) {
+                                const key = item.productId || item.nombre;
+                                const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
+                                devolucionesSummary.set(key, { ...existing, quantity: existing.quantity + diff });
+                            }
+                        });
+                    }
+                });
+                const returnsList = Array.from(devolucionesSummary.values());
 
                 const isExpanded = expandedRouteId === route.id;
-                const diffEfectivo = (blindCounts[route.id]?.efectivo || 0) - totals.efectivo;
+                const isArchived = route.estado === 'Archivada';
 
                 return (
                     <div key={route.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-md">
                         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}>
                             <div className="flex items-center gap-4">
-                                <div className="bg-blue-50 p-3 rounded-full text-blue-600"><TruckIcon className="w-6 h-6"/></div>
+                                <div className={`${isArchived ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-600'} p-3 rounded-full`}><TruckIcon className="w-6 h-6"/></div>
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">{route.nombre}</h3>
-                                    <p className="text-sm text-gray-500 font-medium">{route.repartidorNombre}</p>
+                                    <p className="text-sm text-gray-500 font-medium">{route.repartidorNombre} {isArchived && <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">FINALIZADA</span>}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-8">
                                 <div className="text-right hidden md:block">
-                                    <span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">A Rendir (Total)</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (Total)'}</span>
                                     <span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia)}</span>
                                 </div>
                                 <button className={`w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-gray-200' : ''}`}>
@@ -674,58 +772,74 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
 
                         {isExpanded && (
                             <div className="bg-gray-50/50 border-t border-gray-100 p-6">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    {/* PANEL DE INGRESO (ARQUEO) */}
-                                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                                        <h4 className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-6">1. Arqueo de Valores (Mesa de Entrada)</h4>
-                                        <div className="space-y-5">
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">Efectivo Contado</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-4 top-3.5 text-gray-400 font-bold">$</span>
-                                                    <input type="number" className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-lg text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" placeholder="0.00" onChange={e => handleBlindCountChange(route.id, 'efectivo', e.target.value)} />
-                                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                    {/* CARD 1: EFECTIVO */}
+                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <span className="text-xs font-bold text-gray-400 uppercase">{isArchived ? 'RENDIDO (CAJA)' : 'A RECIBIR (CAJA)'}</span>
+                                            <div className="bg-green-50 p-2 rounded-lg text-green-600"><TruckIcon className="w-4 h-4"/></div>
+                                        </div>
+                                        <div>
+                                            <p className="text-3xl font-extrabold text-gray-900">{formatCurrency(totals.efectivo)}</p>
+                                            <p className="text-xs text-gray-500 mt-1">Dinero físico rendido</p>
+                                        </div>
+                                    </div>
+
+                                    {/* CARD 2: BANCO/CTA CTE */}
+                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <span className="text-xs font-bold text-gray-400 uppercase">BANCO Y FIADO</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-600">Transferencias:</span>
+                                                <span className="font-bold text-gray-900">{formatCurrency(totals.transferencia)}</span>
                                             </div>
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">Transferencias</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-4 top-3.5 text-gray-400 font-bold">$</span>
-                                                    <input type="number" className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-lg text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" placeholder="0.00" value={blindCounts[route.id]?.transferencia || ''} onChange={e => handleBlindCountChange(route.id, 'transferencia', e.target.value)} />
-                                                </div>
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-600">Deuda Clientes:</span>
+                                                <span className="font-bold text-red-600">{formatCurrency(totals.pendiente)}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* PANEL DE RESULTADO */}
-                                    <div className="flex flex-col justify-between">
-                                        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-4 flex-grow">
-                                            <h4 className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-6">2. Validación de Caja</h4>
-                                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-50">
-                                                <span className="text-gray-500 font-medium">Sistema dice (Efectivo):</span>
-                                                <span className="font-bold text-gray-900">{formatCurrency(totals.efectivo)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center mb-6">
-                                                <span className="text-gray-500 font-medium">Ingresado (Real):</span>
-                                                <span className="font-bold text-blue-600">{formatCurrency(blindCounts[route.id]?.efectivo || 0)}</span>
-                                            </div>
-                                            <div className={`p-4 rounded-xl flex justify-between items-center ${diffEfectivo === 0 ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : diffEfectivo > 0 ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200'}`}>
-                                                <div className="flex items-center gap-2">
-                                                    {diffEfectivo === 0 ? <CheckCircleIcon className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
-                                                    <span className="font-bold uppercase text-sm tracking-wide">{diffEfectivo === 0 ? 'BALANCEADO' : diffEfectivo > 0 ? 'SOBRANTE' : 'FALTANTE'}</span>
-                                                </div>
-                                                <span className="font-extrabold text-xl">{formatCurrency(Math.abs(diffEfectivo))}</span>
-                                            </div>
+                                    {/* CARD 3: STOCK */}
+                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-bold text-gray-400 uppercase">CONTROL DE STOCK</span>
+                                            <div className="bg-orange-50 p-2 rounded-lg text-orange-600"><PackageIcon className="w-4 h-4"/></div>
                                         </div>
-                                        
-                                        <div className="flex gap-3">
-                                            <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices))} className="flex-1 py-3 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-all flex justify-center items-center gap-2">
-                                                <PrinterIcon className="w-5 h-5 text-gray-400"/> Reporte
-                                            </button>
-                                            <button onClick={() => handleArchiveRoute(route)} className="flex-[2] py-3 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
-                                                <ArchiveIcon className="w-5 h-5"/> Cerrar Ruta
-                                            </button>
+                                        <div className="flex-grow overflow-y-auto custom-scrollbar max-h-[100px]">
+                                            {returnsList.length > 0 ? (
+                                                <ul className="space-y-1">
+                                                    {returnsList.map((item, idx) => (
+                                                        <li key={idx} className="flex justify-between text-xs border-b border-gray-50 py-1 last:border-0">
+                                                            <span className="text-gray-700 truncate mr-2">{item.nombre}</span>
+                                                            <span className="font-bold text-gray-900 bg-gray-100 px-1.5 rounded">{item.quantity}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-xs text-gray-400 italic mt-2">No hay devoluciones.</p>
+                                            )}
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices))} className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-all flex justify-center items-center gap-2">
+                                        <PrinterIcon className="w-5 h-5 text-gray-500"/> {isArchived ? 'Reimprimir Reporte' : 'Imprimir Reporte'}
+                                    </button>
+                                    
+                                    {/* Si NO está archivada, muestra el botón para cerrar. Si YA lo está, muestra el botón ELIMINAR */}
+                                    {!isArchived ? (
+                                        <button onClick={() => handleArchiveRoute(route)} className="flex-[2] py-3 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
+                                            <ArchiveIcon className="w-5 h-5"/> Confirmar y Cerrar Ruta
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => handleDeleteArchivedRoute(route.id)} className="flex-[2] py-3 bg-red-50 text-red-600 border border-red-100 font-bold rounded-xl hover:bg-red-100 transition-all flex justify-center items-center gap-2">
+                                            <TrashIcon className="w-5 h-5"/> Eliminar del Historial
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}

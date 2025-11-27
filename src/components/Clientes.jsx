@@ -9,10 +9,11 @@ import {
   doc 
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+import Button from './Button'; // <--- IMPORTACIÓN CLAVE
 
 // --- ICONOS PREMIUM (Stroke 1.5, Rounded) ---
-const Icono = ({ path, d2 }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+const Icono = ({ path, d2, className="w-5 h-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d={path} />
     {d2 && <path strokeLinecap="round" strokeLinejoin="round" d={d2} />}
   </svg>
@@ -21,7 +22,7 @@ const Icono = ({ path, d2 }) => (
 const EditIcon = () => <Icono path="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />;
 const DeleteIcon = () => <Icono path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456-1.278A11.862 11.862 0 0020.62 6m-14.456.374a11.862 11.862 0 00-.87 5.143" />;
 const SearchIcon = () => <Icono path="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />;
-const PlusIcon = () => <Icono path="M12 4.5v15m7.5-7.5h-15" />;
+const PlusIcon = ({ className }) => <Icono className={className} path="M12 4.5v15m7.5-7.5h-15" />;
 const UserIcon = () => <Icono path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A1.5 1.5 0 0118 21.75H6.001c-.621 0-1.125-.504-1.125-1.125a1.5 1.5 0 01.624-1.507z" />;
 const EyeIcon = () => <Icono path="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" d2="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />;
 const XIcon = () => <Icono path="M6 18L18 6M6 6l12 12" />;
@@ -155,7 +156,6 @@ function Clientes({ onViewDetail }) {
   };
 
   // --- RENDERIZADO DEL FORMULARIO (MODAL PREMIUM) ---
-  // KEY CHANGE: Inputs ahora tienen bg-slate-50 dentro de contenedores blancos para máximo contraste
   const renderFormFields = (data, handleChange) => (
       <div className="space-y-6">
         {/* SECCIÓN 1: DATOS PERSONALES & UBICACIÓN */}
@@ -305,9 +305,9 @@ function Clientes({ onViewDetail }) {
             <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Cartera de Clientes</h2>
             <p className="text-slate-500 mt-1 font-medium">Gestión comercial y fiscal</p>
         </div>
-        <button onClick={openNewModal} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 transition-all active:scale-95">
-            <PlusIcon className="w-5 h-5"/> Nuevo Cliente
-        </button>
+        <Button onClick={openNewModal} icon={<PlusIcon className="w-5 h-5"/>}>
+            Nuevo Cliente
+        </Button>
       </div>
       
       {/* SEARCH BAR PREMIUM */}
@@ -441,8 +441,9 @@ function Clientes({ onViewDetail }) {
                 <form onSubmit={handleAddCliente}>
                     {renderFormFields(newCliente, handleNewClienteChange)}
                     <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 mt-6">
-                        <button type="button" onClick={closeNewModal} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors">Cancelar</button>
-                        <button type="submit" className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all">Guardar Cliente</button>
+                        {/* --- BOTONES ACTUALIZADOS --- */}
+                        <Button variant="secondary" onClick={closeNewModal}>Cancelar</Button>
+                        <Button type="submit">Guardar Cliente</Button>
                     </div>
                 </form>
             </div>
@@ -462,8 +463,9 @@ function Clientes({ onViewDetail }) {
                 <form onSubmit={handleUpdateCliente}>
                     {renderFormFields(editingCliente, handleEditChange)}
                     <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 mt-6">
-                        <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors">Cancelar</button>
-                        <button type="submit" className="px-8 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-lg shadow-amber-200 hover:shadow-xl hover:-translate-y-0.5 transition-all">Guardar Cambios</button>
+                        {/* --- BOTONES ACTUALIZADOS --- */}
+                        <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit">Guardar Cambios</Button>
                     </div>
                 </form>
             </div>

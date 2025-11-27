@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
 import { collection, doc, getDoc, query, where, onSnapshot } from 'firebase/firestore';
-
+import Button from './Button'; // Asegúrate de la ruta correcta
 // --- ¡NUEVO! Helper para obtener el Lunes de esta semana ---
 // (Copiado de la lógica de la app móvil para que el cálculo sea idéntico)
 const getMonday = (date) => {

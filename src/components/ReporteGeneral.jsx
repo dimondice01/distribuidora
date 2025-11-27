@@ -1,16 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../firebase.js'; 
 import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
-
-// --- Iconos SVG (Internos) ---
+import Button from './Button'; // Asegúrate de la ruta correcta
+// --- Iconos SVG (Estilo iOS) ---
 const TrendingUp = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 6 13.5 15.5 10 12 1 21"></polyline><path d="M22 6h-6v6"/></svg>;
 const TrendingDown = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>;
 const DollarSign = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
 const CreditCard = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
 const RefreshCw = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
+const PrinterIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
 
-
-// --- Constantes (Sin cambios) ---
+// --- Constantes ---
 const RENDER_STATUS = {
     PAGADA: 'Pagada',
     ADEUDA: 'Adeuda',
@@ -23,43 +23,93 @@ const formatCurrency = (value) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value || 0);
 };
 
+// --- Función de Impresión ---
+const printReport = (startDate, endDate, totals, ventas) => {
+    const startStr = startDate.toLocaleDateString('es-AR');
+    const endStr = endDate.toLocaleDateString('es-AR');
+    
+    const rows = ventas.map(v => `
+        <tr>
+            <td>${v.fecha.toLocaleDateString('es-AR')}</td>
+            <td>${v.clienteNombre}</td>
+            <td>${v.vendedorName || 'N/A'}</td>
+            <td>${v.estado}</td>
+            <td style="text-align:right">${formatCurrency(v.totalVenta)}</td>
+            <td style="text-align:right; color:${v.saldoPendiente > 0 ? 'red' : 'black'}">${formatCurrency(v.saldoPendiente)}</td>
+            <td style="text-align:right">${formatCurrency(v.totalVenta - (v.totalCosto || 0))}</td>
+        </tr>
+    `).join('');
+
+    const html = `
+    <html>
+        <head>
+            <title>Reporte General ${startStr} - ${endStr}</title>
+            <style>
+                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+                h1 { color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+                .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+                .metrics { display: flex; gap: 20px; margin-bottom: 30px; }
+                .card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; flex: 1; text-align: center; background: #f9fafb; }
+                .card h3 { margin: 0 0 5px 0; font-size: 14px; color: #666; text-transform: uppercase; }
+                .card p { margin: 0; font-size: 24px; font-weight: bold; color: #333; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+                th { background: #f3f4f6; font-weight: 600; }
+                tr:nth-child(even) { background: #f9fafb; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div>
+                    <h1>Reporte General de Ventas</h1>
+                    <p>Período: ${startStr} al ${endStr}</p>
+                </div>
+                <div style="text-align:right">
+                    <p>Generado el: ${new Date().toLocaleString('es-AR')}</p>
+                </div>
+            </div>
+
+            <div class="metrics">
+                <div class="card"><h3>Total Ventas</h3><p>${formatCurrency(totals.totalVenta)}</p></div>
+                <div class="card"><h3>Ganancia Bruta</h3><p style="color:green">${formatCurrency(totals.gananciaBruta)}</p></div>
+                <div class="card"><h3>Deuda</h3><p style="color:orange">${formatCurrency(totals.totalDeuda)}</p></div>
+                <div class="card"><h3>Costo Mercadería</h3><p>${formatCurrency(totals.totalCosto)}</p></div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th style="text-align:right">Total</th><th style="text-align:right">Deuda</th><th style="text-align:right">Ganancia</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </body>
+    </html>
+    `;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.print();
+};
+
 function ReporteGeneral() {
     const [ventas, setVentas] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // Fechas iniciales (Local Timezone)
     const [startDate, setStartDate] = useState(() => {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return Timestamp.fromDate(d);
+        const d = new Date(); d.setHours(0, 0, 0, 0); return d;
     });
     const [endDate, setEndDate] = useState(() => {
-        const d = new Date();
-        d.setHours(23, 59, 59, 999);
-        return Timestamp.fromDate(d);
+        const d = new Date(); d.setHours(23, 59, 59, 999); return d;
     });
 
-    // --- NUEVO: ESTADO DE PAGINACIÓN ---
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(15);
 
-    // ==================================================================
-    // --- Lógica de 'useMemo' para totales (Sin cambios) ---
-    // ==================================================================
-    const {
-        totalVenta,
-        totalCosto,
-        totalDeuda,
-        gananciaBruta,
-        totalCostoDevoluciones,
-        cantidadDevoluciones
-    } = useMemo(() => {
-        
-        const { 
-            totalVenta, 
-            totalCosto, 
-            totalDeuda, 
-            totalCostoDevoluciones, 
-            cantidadDevoluciones 
-        } = ventas.reduce((acc, v) => {
+    // --- CÁLCULO DE MÉTRICAS (Usando useMemo) ---
+    const totals = useMemo(() => {
+        return ventas.reduce((acc, v) => {
             const costo = v.totalCosto || 0;
             const venta = v.totalVenta || 0;
             const saldo = v.saldoPendiente || 0;
@@ -72,49 +122,66 @@ function ReporteGeneral() {
                 acc.totalCosto += costo;
                 acc.totalDeuda += saldo;
             }
-            
             return acc;
         }, {
-            totalVenta: 0,
-            totalCosto: 0,
-            totalDeuda: 0,
-            totalCostoDevoluciones: 0,
-            cantidadDevoluciones: 0
+            totalVenta: 0, totalCosto: 0, totalDeuda: 0, totalCostoDevoluciones: 0, cantidadDevoluciones: 0
         });
-
-        const gananciaBruta = totalVenta - totalCosto - totalCostoDevoluciones;
-
-        return { totalVenta, totalCosto, totalDeuda, gananciaBruta, totalCostoDevoluciones, cantidadDevoluciones };
-
     }, [ventas]);
-    // ==================================================================
-    // --- FIN DEL 'useMemo' de totales ---
-    // ==================================================================
 
+    const gananciaBruta = totals.totalVenta - totals.totalCosto - totals.totalCostoDevoluciones;
 
+    // --- CARGA DE DATOS (Filtrado Mejorado) ---
     useEffect(() => {
         setIsLoading(true);
+        
+        // Convertir fechas locales a Timestamp de Firestore para la query
+        const startTs = Timestamp.fromDate(startDate);
+        const endTs = Timestamp.fromDate(endDate);
+
+        // NOTA: Firestore requiere índices compuestos para range filters en diferentes campos.
+        // Para simplificar y evitar errores de índice, traemos por fecha de creación y filtramos en cliente.
+        // O traemos todo si el rango es corto. Aquí usaremos 'fecha' como base.
+        
         const q = query(
             collection(db, "ventas"),
-            orderBy("fecha", "desc"),
+            orderBy("fecha", "desc")
         );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const ventasData = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                const fechaVenta = data.fecha; 
                 
-                if (fechaVenta && fechaVenta >= startDate && fechaVenta <= endDate) {
-                    ventasData.push({
-                        id: doc.id,
-                        ...data,
-                        fecha: fechaVenta.toDate ? fechaVenta.toDate() : new Date(fechaVenta),
-                    });
+                // Determinamos la fecha relevante:
+                // Si tiene fechaUltimoPago (ej: cobro de ruta), usamos esa. Si no, la fecha de creación.
+                // Esto asegura que el reporte refleje CUÁNDO ocurrió el movimiento financiero.
+                let fechaMovimiento = data.fechaUltimoPago ? data.fechaUltimoPago.toDate() : (data.fecha ? data.fecha.toDate() : null);
+                
+                if (fechaMovimiento) {
+                    // Filtro de fecha (Local comparison)
+                    if (fechaMovimiento >= startDate && fechaMovimiento <= endDate) {
+                        
+                        // FILTRO CLAVE: Solo mostrar si hubo movimiento real (No Pendientes puros sin pago)
+                        // Si es 'Pendiente de Entrega' y NO tiene pagos parciales, lo ignoramos (es una venta futura/planificada).
+                        const tienePagos = (data.pagoEfectivo > 0 || data.pagoTransferencia > 0);
+                        const esPendientePuro = data.estado === RENDER_STATUS.PENDIENTE && !tienePagos;
+
+                        if (!esPendientePuro) {
+                            ventasData.push({
+                                id: doc.id,
+                                ...data,
+                                fecha: fechaMovimiento, // Usamos la fecha efectiva para mostrar en la tabla
+                            });
+                        }
+                    }
                 }
             });
+            
+            // Ordenar por fecha descendente
+            ventasData.sort((a, b) => b.fecha - a.fecha);
+            
             setVentas(ventasData);
-            setCurrentPage(1); // Resetear paginación al cambiar filtros de fecha
+            setCurrentPage(1);
             setIsLoading(false);
         }, (error) => {
             console.error("Error al obtener ventas: ", error);
@@ -125,247 +192,204 @@ function ReporteGeneral() {
     }, [startDate, endDate]);
 
     
-    // --- NUEVO: useMemo para la paginación ---
+    // --- Paginación ---
     const { paginatedVentas, totalPages } = useMemo(() => {
         const total = ventas.length;
         const totalP = Math.ceil(total / itemsPerPage);
         const start = (currentPage - 1) * itemsPerPage;
         const end = start + itemsPerPage;
-        return {
-            paginatedVentas: ventas.slice(start, end),
-            totalPages: totalP
-        };
+        return { paginatedVentas: ventas.slice(start, end), totalPages: totalP };
     }, [ventas, currentPage, itemsPerPage]);
-
-    // --- NUEVO: Handlers de paginación ---
-    const handlePageChange = (newPage) => {
-        if (newPage > 0 && newPage <= totalPages) {
-            setCurrentPage(newPage);
-        }
-    };
-
 
     const handleDateChange = (e) => {
         const { name, value } = e.target;
         const [year, month, day] = value.split('-').map(Number);
         
         if (name === 'startDate') {
-            const newStartDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-            setStartDate(Timestamp.fromDate(newStartDate));
+            const d = new Date(year, month - 1, day, 0, 0, 0, 0);
+            setStartDate(d);
         } else if (name === 'endDate') {
-            const newEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
-            setEndDate(Timestamp.fromDate(newEndDate));
+            const d = new Date(year, month - 1, day, 23, 59, 59, 999);
+            setEndDate(d);
         }
     };
 
-    // --- Función de formato de fecha para los inputs (sin cambios) ---
-    const formatDateForInput = (timestamp) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate(); 
+    const formatDateForInput = (date) => {
+        if (!date) return '';
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const day = date.getDate().toString().padStart(2, '0');
         return `${year}-${month}-${day}`;
     };
 
-
     return (
-        <div className="p-6 bg-gray-50 min-h-screen">
+        <div className="p-8 bg-gray-50 min-h-screen font-sans text-gray-800">
             <div className="max-w-7xl mx-auto">
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Reporte General</h1>
+                <header className="flex flex-wrap justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Reporte General</h1>
+                        <p className="text-gray-500 mt-1">Análisis financiero y operativo</p>
+                    </div>
+                    
+                    {/* Controles */}
+                    <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+                        <div className="flex items-center gap-2 px-2">
+                            <label htmlFor="startDate" className="text-xs font-bold text-gray-500 uppercase">Desde</label>
+                            <input type="date" name="startDate" id="startDate" value={formatDateForInput(startDate)} onChange={handleDateChange} className="text-sm font-bold text-indigo-700 outline-none bg-transparent cursor-pointer"/>
+                        </div>
+                        <div className="w-px h-6 bg-gray-200"></div>
+                        <div className="flex items-center gap-2 px-2">
+                            <label htmlFor="endDate" className="text-xs font-bold text-gray-500 uppercase">Hasta</label>
+                            <input type="date" name="endDate" id="endDate" value={formatDateForInput(endDate)} onChange={handleDateChange} className="text-sm font-bold text-indigo-700 outline-none bg-transparent cursor-pointer"/>
+                        </div>
+                        <button onClick={() => printReport(startDate, endDate, {...totals, gananciaBruta}, ventas)} className="ml-2 p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors" title="Imprimir Reporte">
+                            <PrinterIcon className="w-5 h-5"/>
+                        </button>
+                    </div>
+                </header>
                 
-                {/* Controles de Fecha (sin cambios) */}
-                <div className="mb-6 p-4 bg-white rounded-lg shadow flex items-center space-x-4">
-                    <div>
-                        <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">Desde</label>
-                        <input
-                            type="date"
-                            name="startDate"
-                            id="startDate"
-                            value={formatDateForInput(startDate)}
-                            onChange={handleDateChange}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">Hasta</label>
-                        <input
-                            type="date"
-                            name="endDate"
-                            id="endDate"
-                            value={formatDateForInput(endDate)}
-                            onChange={handleDateChange}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                        />
-                    </div>
-                </div>
-
-                {/* ================================================== */}
-                {/* --- CAMBIO: Tarjetas de Resumen (Estilo Corregido) --- */}
-                {/* ================================================== */}
+                {/* Tarjetas de Resumen (Estilo iOS Glassy) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
                     
-                    {/* Card 1: Total Ventas */}
-                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500 flex flex-col justify-between h-full">
-                        <div className="flex items-start gap-4"> 
-                            <div className="p-3 rounded-xl bg-green-100 text-green-600">{<TrendingUp />}</div>
-                            <div className="min-w-0 flex-1"> 
-                                <p className="text-sm text-gray-500 font-medium">Total Ventas (Neto)</p>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalVenta)}</p>
-                        </div>
-                    </div>
+                    <MetricCard 
+                        title="Total Ventas" 
+                        value={formatCurrency(totals.totalVenta)} 
+                        icon={<TrendingUp className="text-emerald-600"/>} 
+                        bgIcon="bg-emerald-100"
+                        borderColor="border-emerald-500"
+                    />
 
-                    {/* Card 2: Ganancia Bruta */}
-                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-blue-500 flex flex-col justify-between h-full">
-                        <div className="flex items-start gap-4"> 
-                            <div className="p-3 rounded-xl bg-blue-100 text-blue-600">{<DollarSign />}</div>
-                            <div className="min-w-0 flex-1"> 
-                                <p className="text-sm text-gray-500 font-medium">Ganancia Bruta</p>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(gananciaBruta)}</p>
-                        </div>
-                    </div>
+                    <MetricCard 
+                        title="Ganancia Bruta" 
+                        value={formatCurrency(gananciaBruta)} 
+                        icon={<DollarSign className="text-blue-600"/>} 
+                        bgIcon="bg-blue-100"
+                        borderColor="border-blue-500"
+                    />
 
-                    {/* Card 3: Saldo Pendiente */}
-                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-yellow-500 flex flex-col justify-between h-full">
-                        <div className="flex items-start gap-4"> 
-                            <div className="p-3 rounded-xl bg-yellow-100 text-yellow-600">{<CreditCard />}</div>
-                            <div className="min-w-0 flex-1"> 
-                                <p className="text-sm text-gray-500 font-medium">Saldo Pendiente</p>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalDeuda)}</p>
-                        </div>
-                    </div>
+                    <MetricCard 
+                        title="Saldo Pendiente" 
+                        value={formatCurrency(totals.totalDeuda)} 
+                        icon={<CreditCard className="text-amber-600"/>} 
+                        bgIcon="bg-amber-100"
+                        borderColor="border-amber-500"
+                    />
 
-                    {/* Card 4: Costo Devoluciones */}
-                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500 flex flex-col justify-between h-full">
-                        <div className="flex items-start gap-4"> 
-                            <div className="p-3 rounded-xl bg-red-100 text-red-600">{<RefreshCw />}</div>
-                            <div className="min-w-0 flex-1"> 
-                                <p className="text-sm text-gray-500 font-medium">Costo Devoluciones</p>
-                                <p className="text-xs text-gray-400">{cantidadDevoluciones} devol.</p>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <p className="text-2xl font-bold text-red-700 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalCostoDevoluciones)}</p>
-                        </div>
-                    </div>
+                    <MetricCard 
+                        title="Costo Devoluciones" 
+                        value={formatCurrency(totals.totalCostoDevoluciones)} 
+                        icon={<RefreshCw className="text-rose-600"/>} 
+                        bgIcon="bg-rose-100"
+                        borderColor="border-rose-500"
+                        subtext={`${totals.cantidadDevoluciones} devol.`}
+                    />
                     
-                    {/* Card 5: Costo Mercadería */}
-                    <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-gray-500 flex flex-col justify-between h-full">
-                        <div className="flex items-start gap-4"> 
-                            <div className="p-3 rounded-xl bg-gray-100 text-gray-600">{<TrendingDown />}</div>
-                            <div className="min-w-0 flex-1"> 
-                                <p className="text-sm text-gray-500 font-medium">Costo Mercadería</p>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <p className="text-2xl font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{formatCurrency(totalCosto)}</p>
-                        </div>
-                    </div>
+                    <MetricCard 
+                        title="Costo Mercadería" 
+                        value={formatCurrency(totals.totalCosto)} 
+                        icon={<TrendingDown className="text-gray-600"/>} 
+                        bgIcon="bg-gray-100"
+                        borderColor="border-gray-400"
+                    />
                 </div>
 
-                {/* ================================================== */}
-                {/* --- FIN CAMBIO TARJETAS --- */}
-                {/* ================================================== */}
-
-
-                {/* Tabla de Ventas (Modificada para paginación) */}
-                <h2 className="text-2xl font-semibold text-gray-800 mb-4">Historial de Operaciones</h2>
-                {isLoading ? (
-                    <p>Cargando...</p>
-                ) : (
-                    <div className="bg-white shadow rounded-lg overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendedor</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Deuda</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ganancia Bruta</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {/* --- CAMBIO: Mapeo sobre 'paginatedVentas' --- */}
-                                {paginatedVentas.map((venta) => (
-                                    <tr 
-                                        key={venta.id} 
-                                        className={
-                                            venta.tipo === 'devolucion' ? 'bg-red-50 hover:bg-red-100' : 
-                                            (venta.estado === RENDER_STATUS.ANULADA ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50')
-                                        }
-                                    >
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{venta.fecha.toLocaleDateString('es-AR')}</td>
-                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{venta.clienteNombre}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-700">{venta.vendedorName}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                venta.tipo === 'devolucion' ? 'bg-red-200 text-red-900' :
-                                                venta.estado === RENDER_STATUS.PAGADA ? 'bg-green-100 text-green-800' :
-                                                venta.estado === RENDER_STATUS.ADEUDA ? 'bg-yellow-100 text-yellow-800' :
-                                                venta.estado === RENDER_STATUS.REPARTIENDO ? 'bg-indigo-100 text-indigo-800' :
-                                                venta.estado === RENDER_STATUS.PENDIENTE ? 'bg-gray-200 text-gray-800' :
-                                                'bg-red-100 text-red-800' // (Anulada)
-                                            }`}>
-                                                {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right font-medium">{formatCurrency(venta.totalVenta)}</td>
-                                        <td className="px-6 py-4 text-right font-bold text-red-700">{formatCurrency(venta.saldoPendiente)}</td>
-                                        <td className={`px-6 py-4 text-right font-bold ${
-                                            (venta.totalVenta - venta.totalCosto) < 0 ? 'text-red-700' : 'text-gray-700'
-                                        }`}>
-                                            {formatCurrency(venta.totalVenta - venta.totalCosto)}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {paginatedVentas.length === 0 && (
-                                    <tr>
-                                        <td colSpan="7" className="px-6 py-10 text-center text-gray-500 italic">
-                                            No se encontraron operaciones para el rango de fechas seleccionado.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-
-                        {/* --- NUEVO: Controles de Paginación --- */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-between items-center p-4 border-t">
-                                <button
-                                    onClick={() => handlePageChange(currentPage - 1)}
-                                    disabled={currentPage === 1}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                    &larr; Anterior
-                                </button>
-                                <span className="text-sm text-gray-700">
-                                    Página {currentPage} de {totalPages}
-                                </span>
-                                <button
-                                    onClick={() => handlePageChange(currentPage + 1)}
-                                    disabled={currentPage === totalPages}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                    Siguiente &rarr;
-                                </button>
-                            </div>
-                        )}
+                {/* Tabla de Ventas */}
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-gray-800">Movimientos Detallados</h2>
+                        <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-200">
+                            {ventas.length} registros encontrados
+                        </span>
                     </div>
-                )}
+                    
+                    {isLoading ? (
+                        <div className="p-10 text-center text-gray-400 animate-pulse">Cargando datos...</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-100">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Fecha Movimiento</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cliente</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vendedor</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Deuda</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Ganancia</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {paginatedVentas.map((venta) => (
+                                        <tr key={venta.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                                {venta.fecha.toLocaleDateString('es-AR')}
+                                                <div className="text-[10px] text-gray-400">{venta.fecha.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{venta.clienteNombre}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{venta.vendedorName || '-'}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-bold rounded-full ${
+                                                    venta.tipo === 'devolucion' ? 'bg-rose-100 text-rose-800' :
+                                                    venta.estado === RENDER_STATUS.PAGADA ? 'bg-emerald-100 text-emerald-800' :
+                                                    venta.estado === RENDER_STATUS.ADEUDA ? 'bg-amber-100 text-amber-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right text-sm font-bold text-gray-800">{formatCurrency(venta.totalVenta)}</td>
+                                            <td className={`px-6 py-4 text-right text-sm font-bold ${venta.saldoPendiente > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                {formatCurrency(venta.saldoPendiente)}
+                                            </td>
+                                            <td className={`px-6 py-4 text-right text-sm font-bold ${(venta.totalVenta - venta.totalCosto) > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                {formatCurrency(venta.totalVenta - (venta.totalCosto || 0))}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {paginatedVentas.length === 0 && (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-10 text-center text-gray-400 italic">
+                                                No hay movimientos registrados en este período.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* Paginación */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-gray-50">
+                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 shadow-sm">
+                                Anterior
+                            </button>
+                            <span className="text-sm font-medium text-gray-600">Página {currentPage} de {totalPages}</span>
+                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 shadow-sm">
+                                Siguiente
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
 }
+
+// --- Componente Auxiliar UI ---
+const MetricCard = ({ title, value, icon, bgIcon, borderColor, subtext }) => (
+    <div className={`bg-white p-5 rounded-2xl shadow-md border-l-4 ${borderColor} flex flex-col justify-between h-full transition-transform hover:scale-[1.02]`}>
+        <div className="flex items-start gap-4"> 
+            <div className={`p-2.5 rounded-xl ${bgIcon}`}>{icon}</div>
+            <div className="min-w-0 flex-1"> 
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{title}</p>
+            </div>
+        </div>
+        <div className="mt-4">
+            <p className="text-2xl font-extrabold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{value}</p>
+            {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
+        </div>
+    </div>
+);
 
 export default ReporteGeneral;

@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; 
 import { auth } from './firebase.js';
 import { onAuthStateChanged } from 'firebase/auth';
+import { toast } from 'react-toastify'; // Importamos toast para usarlo en los eventos
 
 // Componentes
 import LoginScreen from './components/LoginScreen.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CatalogoPublico from './components/CatalogoPublico.jsx'; 
-import RedirectToApp from './components/RedirectToApp.jsx'; // ✅ IMPORTAMOS EL COMPONENTE PUENTE
+import RedirectToApp from './components/RedirectToApp.jsx'; 
 
 // Librería de Notificaciones
 import { ToastContainer } from 'react-toastify';
@@ -19,6 +20,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // --- 1. LÓGICA DE AUTENTICACIÓN ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -27,10 +29,45 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- 2. LÓGICA DE DETECCIÓN OFFLINE/ONLINE (UX PREMIUM) ---
+  useEffect(() => {
+    const handleOffline = () => {
+      toast.warn("📶 Modo Offline: Sin conexión. Puedes seguir trabajando, los datos se guardarán localmente.", {
+        position: "bottom-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: "colored",
+      });
+    };
+
+    const handleOnline = () => {
+      toast.success("🌐 Conexión Restaurada: Sincronizando datos con la nube...", {
+        position: "bottom-right",
+        autoClose: 3000,
+        theme: "colored",
+      });
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-xl text-gray-500 animate-pulse">Cargando sistema...</p>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        {/* Spinner o Loader simple */}
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-bold text-slate-500 animate-pulse">Cargando sistema...</p>
+        </div>
       </div>
     );
   }
@@ -42,18 +79,16 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-100 font-sans text-gray-800">
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
         <Routes>
           
           {/* --- RUTA PÚBLICA (Catálogo) --- */}
-          {/* El ":lista?" permite que funcione con "/catalogo", "/catalogo/Mayorista", etc. */}
           <Route path="/catalogo/:lista?" element={<CatalogoPublico />} />
 
-          {/* ✅ NUEVA RUTA PUENTE PARA WHATSAPP */}
+          {/* ✅ RUTA PUENTE PARA WHATSAPP */}
           <Route path="/abrir-pedido" element={<RedirectToApp />} />
 
           {/* --- RUTA DE LOGIN --- */}
-          {/* Si ya está logueado, lo manda directo al dashboard */}
           <Route path="/login" element={!user ? <LoginScreen /> : <Navigate to="/" />} />
 
           {/* --- RUTA PRIVADA (Dashboard) --- */}
@@ -66,7 +101,7 @@ function App() {
             } 
           />
 
-          {/* Cualquier otra ruta desconocida redirige al inicio */}
+          {/* Redirección por defecto */}
           <Route path="*" element={<Navigate to="/" />} />
 
         </Routes>
