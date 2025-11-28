@@ -245,6 +245,7 @@ function Dashboard({ user }) {
           </button>
         </header>
 
+
         {/* Content Scroll Area */}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8 relative no-scrollbar scroll-smooth bg-slate-50/50">
             <div className="max-w-[1920px] mx-auto animate-fade-in-up pb-10">
