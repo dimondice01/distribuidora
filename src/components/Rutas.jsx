@@ -13,26 +13,32 @@ const SearchIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg"
 const PlusIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const XIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
 const ArrowRightIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
-const CheckCircleIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 const PrinterIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
 const ArchiveIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>;
 const ChevronDownIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const EditIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
 const EyeIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
 const TrashIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
-const SettingsIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
-const AlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-const PackageIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
 
 // --- UTILIDADES ---
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
+
+// Formatea la fecha de AFIP YYYYMMDD a DD/MM/YYYY
+const formatAfipDate = (dateStr) => {
+    if (!dateStr || dateStr.length !== 8) return dateStr;
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    return `${day}/${month}/${year}`;
+};
 
 const printHTML = (htmlContent) => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
         printWindow.document.write(htmlContent);
         printWindow.document.close();
-        printWindow.print();
+        // Aumentamos el tiempo de espera para asegurar que el QR se renderice
+        setTimeout(() => printWindow.print(), 1500);
     } else {
         alert("El navegador bloqueó la impresión. Por favor, deshabilite el bloqueador de pop-ups.");
     }
@@ -54,37 +60,194 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     return `<html><head><title>Reporte de Carga - ${routeName}</title><style>body{font-family: Arial, sans-serif; margin: 20px;} h1, h2, h3 {color: #333;} table{width: 100%; border-collapse: collapse; margin-top: 20px;} th, td{padding: 12px; text-align: left;} thead{background-color: #f2f2f2;}</style></head><body><h1>Reporte de Carga para Depósito</h1><h2>Ruta: ${routeName}</h2><h3>Repartidor: ${repartidorNombre}</h3><p>Fecha de Emisión: ${new Date().toLocaleString('es-AR')}</p><hr/><table><thead><tr><th style="width:150px;">Cantidad a Cargar</th><th>Producto</th></tr></thead><tbody>${itemsRows}</tbody></table></body></html>`;
 };
 
+// --- AUXILIAR: GENERADOR DE QR AFIP ---
+const getAfipQrUrl = (venta) => {
+    if (!venta.afipCAE) return null;
+
+    const CUIT_EMISOR = 27278612932; 
+    const PTO_VTA = 5; 
+    
+    let tipoCmp = 11; // C
+    if (venta.afipLetra === 'A') tipoCmp = 1;
+    if (venta.afipLetra === 'B') tipoCmp = 6;
+
+    const fechaObj = venta.fecha instanceof Date ? venta.fecha : new Date(venta.fecha.seconds * 1000);
+    const fechaStr = fechaObj.toISOString().split('T')[0];
+
+    const datosQr = {
+        ver: 1,
+        fecha: fechaStr,
+        cuit: CUIT_EMISOR,
+        ptoVta: PTO_VTA,
+        tipoCmp: tipoCmp,
+        nroCmp: parseInt(venta.afipNumeroComprobante || 0),
+        importe: parseFloat(venta.totalVenta),
+        moneda: "PES",
+        ctz: 1,
+        tipoDocRec: parseInt(venta.clienteTipoDoc === 'CUIT' ? 80 : 96), 
+        nroDocRec: parseInt(venta.clienteCuit || 0),
+        tipoCodAut: "E",
+        codAut: parseInt(venta.afipCAE)
+    };
+
+    try {
+        const jsonString = JSON.stringify(datosQr);
+        const base64Data = btoa(jsonString); 
+        const urlAfip = `https://www.afip.gob.ar/fe/qr/?p=${base64Data}`;
+        return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(urlAfip)}`;
+    } catch (e) {
+        console.error("Error generando QR:", e);
+        return null;
+    }
+};
+
+// --- PDF DE FACTURA "AFIP COMPACTO & LIMPIO" ---
 const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
     const fechaImpresion = venta.fecha ? (venta.fecha instanceof Date ? venta.fecha : new Date(venta.fecha.seconds * 1000)) : new Date();
-    const itemsHtml = (venta.items || []).map(item => `
-        <tr class="item"><td>${item.nombre}</td><td class="text-center">${item.quantity}</td><td class="text-right">${formatCurrency(item.precio)}</td><td class="text-right">${formatCurrency(item.quantity * item.precio)}</td></tr>
-        ${item.promoAplicada ? `<tr class="promotion"><td colspan="4"><span class="promo-tag">Promo Aplicada:</span> ${item.promoAplicada}</td></tr>` : ''}
+    
+    const tieneCAE = !!venta.afipCAE;
+    const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
+    const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
+    const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
+    
+    const ptoVtaStr = "00005";
+    const numCompStr = String(venta.afipNumeroComprobante || venta.id.substring(0, 8)).padStart(8, '0');
+    const numeroCompleto = `${ptoVtaStr}-${numCompStr}`;
+
+    const qrUrl = getAfipQrUrl(venta);
+
+    // Condición IVA Abreviada
+    const condIvaTexto = venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : venta.clienteCondicionIVA === 'MT' ? 'Monotributo' : 'Cons. Final';
+
+    // Fecha Vencimiento formateada
+    const vtoCaeFormateado = venta.afipFechaVtoCAE ? formatAfipDate(venta.afipFechaVtoCAE) : '';
+
+    const itemsHtml = (venta.items || []).map((item, index) => `
+        <tr style="border-bottom: 1px solid #ccc;">
+            <td style="padding: 2px 5px; font-size: 10px;">${item.nombre}</td>
+            <td style="padding: 2px 5px; text-align: center; font-size: 10px;">${item.quantity}</td>
+            <td style="padding: 2px 5px; text-align: right; font-size: 10px;">${formatCurrency(item.precio)}</td>
+            <td style="padding: 2px 5px; text-align: right; font-size: 10px; font-weight: bold;">${formatCurrency(item.quantity * item.precio)}</td>
+        </tr>
     `).join('');
-    return `
-        <div class="invoice-box" style="border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,.15); border-radius: 8px; padding: 30px; margin: auto;">
-            <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                <div class="company-details" style="text-align: left;"><h1>Distribuidora La Llave</h1><p>Dirección, Ciudad<br>Teléfono: 3804-798844</p></div>
-                <div class="invoice-details" style="text-align: right;">
-                    <h2>FACTURA</h2>
-                    <p><strong>Nº:</strong> ${venta.numeroFactura || venta.id.substring(0, 8)}<br><strong>Fecha:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br><strong>Vendedor:</strong> ${venta.vendedorNombre || venta.vendedorName || 'N/A'}</p>
+
+    let bloquePie = '';
+    if (tieneCAE) {
+        bloquePie = `
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div><img src="${qrUrl}" alt="QR" style="width: 80px; height: 80px; display: block; border: 1px solid #000;"></div>
+                <div style="font-size: 10px; font-weight: bold; line-height: 1.4;">
+                    <span style="font-size: 12px; font-style: italic;">AFIP</span><br>
+                    CAE: ${venta.afipCAE}<br>
+                    Vto. CAE: ${vtoCaeFormateado}
                 </div>
             </div>
-            <div class="client-info" style="margin-top: 30px; padding: 15px; background-color: #f7f7f7; border-radius: 5px;">
-                <strong>Cliente:</strong> ${venta.clienteNombre || clientDetails.nombre || 'Consumidor Final'}<br><strong>Dirección:</strong> ${clientDetails.direccion || 'N/A'}<br><strong>Teléfono:</strong> ${clientDetails.telefono || 'N/A'} | <strong>CUIT/DNI:</strong> ${clientDetails.numeroDocumento || 'N/A'}<br><strong>Zona:</strong> ${zonaNombre}
+        `;
+    } else {
+        bloquePie = `
+            <div style="border: 1px dashed #999; padding: 5px; text-align: center; background: #eee;">
+                <strong style="font-size: 10px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
             </div>
-            <table class="details-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                <thead><tr><th style="padding: 10px;">Producto</th><th class="text-center" style="padding: 10px; text-align: center;">Cant.</th><th class="text-right" style="padding: 10px; text-align: right;">P. Unit.</th><th class="text-right" style="padding: 10px; text-align: right;">Subtotal</th></tr></thead>
-                <tbody>${itemsHtml}</tbody>
+        `;
+    }
+
+    return `
+    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #000; background: #fff; color: #000; position: relative;">
+        
+        <div style="border-bottom: 1px solid #000; height: 120px; position: relative;">
+            
+            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 60px; height: 60px; border-left: 1px solid #000; border-right: 1px solid #000; border-bottom: 1px solid #000; background: #fff; text-align: center; display: flex; flex-direction: column; justify-content: center;">
+                <div style="font-size: 32px; font-weight: bold; line-height: 1;">${letra}</div>
+                <div style="font-size: 9px; margin-top: 2px;">${codComprobante}</div>
+            </div>
+            
+            <div style="position: absolute; left: 50%; top: 60px; bottom: 0; border-left: 1px solid #000;"></div>
+
+            <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
+                <h1 style="margin: 0 0 5px 0; font-size: 16px; font-weight: 900; text-transform: uppercase;">Distribuidora La Llave</h1>
+                <p style="margin: 0; font-size: 9px; line-height: 1.3;">
+                    <strong>Razón Social:</strong> Tu Nombre Completo<br>
+                    <strong>Domicilio:</strong> Dirección Real, La Rioja<br>
+                    <strong>Condición IVA:</strong> Monotributo
+                </p>
+            </div>
+
+            <div style="width: 50%; float: right; padding: 10px 10px 10px 40px; box-sizing: border-box;">
+                <h2 style="margin: 0 0 5px 0; font-size: 16px;">${tituloComprobante}</h2>
+                <p style="margin: 0; font-size: 10px; line-height: 1.4;">
+                    <strong>Punto de Venta: 00005</strong> &nbsp; <strong>Comp. Nro: ${numCompStr}</strong><br>
+                    <strong>Fecha de Emisión:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                    <strong>CUIT:</strong> 27-27861293-2 <br>
+                    <strong>Ing. Brutos:</strong> 27-27861293-2 <br>
+                    <strong>Inicio de Actividades:</strong> 01/01/2024
+                </p>
+            </div>
+        </div>
+
+        <div style="border-bottom: 1px solid #000; padding: 4px 10px; font-size: 9px; background: #fff; line-height: 1.3;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 65%; padding-bottom: 2px; vertical-align: top;">
+                        <span style="color:#444; font-size:8px; text-transform:uppercase;">Cliente:</span> 
+                        <strong style="text-transform: uppercase; font-size: 10px;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
+                    </td>
+                    <td style="width: 35%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                        <span style="color:#444; font-size:8px; text-transform:uppercase;">CUIT/DNI:</span> 
+                        <strong style="font-size: 10px;">${venta.clienteCuit || clientDetails.numeroDocumento || 'S/D'}</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="padding-top: 2px; vertical-align: top;">
+                        <span style="color:#444; font-size:8px; text-transform:uppercase;">Domicilio:</span> 
+                        <span style="font-size: 9px;">${clientDetails.direccion || 'N/A'}</span>
+                        &nbsp;&nbsp;<span style="color:#ccc">|</span>&nbsp;&nbsp;
+                        <span style="color:#444; font-size:8px; text-transform:uppercase;">IVA:</span> 
+                        <span style="font-size: 9px;">${condIvaTexto}</span>
+                    </td>
+                </tr>
             </table>
-            <table class="totals-table" style="width: 40%; margin-left: 60%; margin-top: 20px;"><tr class="total"><td style="padding: 8px;">TOTAL</td><td class="text-right" style="padding: 8px; text-align: right;">${formatCurrency(venta.totalVenta)}</td></tr></table>
-            ${venta.observaciones ? `<div class="mt-4 p-3 border rounded-md text-sm bg-gray-50"><strong>Observaciones:</strong> ${venta.observaciones}</div>` : ''}
-            <div class="footer" style="margin-top: 30px; text-align: center; font-size: 10px; color: #888;">Gracias por su compra. El estado de esta factura es: <strong>${venta.estado}</strong>.</div>
-        </div>`;
+        </div>
+
+        <div style="min-height: 250px; padding-top: 5px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                <thead style="border-bottom: 1px solid #000; border-top: 1px solid #000; background: #eee;">
+                    <tr>
+                        <th style="padding: 4px; text-align: left;">DESCRIPCIÓN</th>
+                        <th style="padding: 4px; text-align: center; width: 40px;">CANT.</th>
+                        <th style="padding: 4px; text-align: right; width: 80px;">P. UNIT.</th>
+                        <th style="padding: 4px; text-align: right; width: 80px;">IMPORTE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="border-top: 1px solid #000; display: flex;">
+            <div style="width: 65%; padding: 10px; box-sizing: border-box;">
+                ${bloquePie}
+            </div>
+
+            <div style="width: 35%; border-left: 1px solid #000;">
+                <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 5px 15px 5px 5px; text-align: right;"><strong>Subtotal:</strong></td>
+                        <td style="padding: 5px 15px 5px 5px; text-align: right;">${formatCurrency(venta.totalVenta)}</td>
+                    </tr>
+                    <tr style="background: #ddd; border-top: 1px solid #000;">
+                        <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>TOTAL:</strong></td>
+                        <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>${formatCurrency(venta.totalVenta)}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+    </div>`;
 };
 
 // --- REPORTE DE RENDICIÓN (AUTOMÁTICO) ---
 const generateSettlementReportHTML = (route, invoices) => {
-    // 1. Calculamos TOTALES FINANCIEROS
     const resumen = invoices.reduce((acc, fac) => {
         acc.efectivo += fac.pagoEfectivo || 0;
         acc.transferencia += fac.pagoTransferencia || 0;
@@ -93,7 +256,6 @@ const generateSettlementReportHTML = (route, invoices) => {
         return acc;
     }, { efectivo: 0, transferencia: 0, saldoPendiente: 0, totalVenta: 0 });
 
-    // 2. Calculamos DEVOLUCIONES DE STOCK
     const devolucionesSummary = new Map();
     invoices.forEach(invoice => {
         if (invoice.estado === 'Anulada') {
@@ -109,7 +271,6 @@ const generateSettlementReportHTML = (route, invoices) => {
                 const original = item.originalQuantity !== undefined ? item.originalQuantity : item.quantity;
                 const final = item.quantity;
                 const diff = original - final;
-                
                 if (diff > 0) {
                     const key = item.productId || item.nombre;
                     const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
@@ -120,58 +281,9 @@ const generateSettlementReportHTML = (route, invoices) => {
     });
 
     const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight:bold;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
-    
-    // 3. Detalle de facturas
     const facturasRows = invoices.map(inv => `<tr><td style="padding: 8px; border: 1px solid #ddd;">${inv.clienteNombre}</td><td style="padding: 8px; border: 1px solid #ddd;">${inv.estado}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.totalVenta)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoEfectivo || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoTransferencia || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: red;">${formatCurrency(inv.saldoPendiente)}</td></tr>`).join('');
 
-    return `<html>
-        <head>
-            <title>Rendición - ${route.nombre}</title>
-            <style>
-                body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} 
-                h1, h2, h3 {color: #2c3e50;} 
-                table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;} 
-                th, td{padding: 10px; text-align: left; border-bottom: 1px solid #eee;} 
-                th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #7f8c8d;} 
-                .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } 
-                .amount { text-align: right; } 
-                .danger { color: #e74c3c; } 
-                .success { color: #27ae60; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
-                <div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div>
-                <div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div>
-            </div>
-
-            <h3>1. DINERO A ENTREGAR (CAJA)</h3>
-            <div class="box">
-                <table style="margin:0;">
-                    <tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr>
-                    <tr><td style="font-size: 14px;">TRANSFERENCIAS (Banco):</td><td class="amount" style="font-size: 18px;">${formatCurrency(resumen.transferencia)}</td></tr>
-                    <tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr>
-                    <tr style="border-top: 2px solid #333; background-color: #fff;">
-                        <td><strong>TOTAL VENTA RUTA:</strong></td>
-                        <td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td>
-                    </tr>
-                </table>
-            </div>
-
-            <h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>
-            ${devolucionesRows.length > 0 
-                ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` 
-                : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}
-
-            <h3>3. Detalle por Cliente</h3>
-            <table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efectivo</th><th class="amount">Transf.</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table>
-            
-            <div style="margin-top: 60px; display: flex; justify-content: space-between;">
-                <div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div>
-                <div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div>
-            </div>
-        </body>
-    </html>`;
+    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;} th, td{padding: 10px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #7f8c8d;} .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; font-weight: bold; }</style></head><body><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div></div><h3>1. DINERO A ENTREGAR (CAJA)</h3><div class="box"><table style="margin:0;"><tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td style="font-size: 14px;">TRANSFERENCIAS (Banco):</td><td class="amount" style="font-size: 18px;">${formatCurrency(resumen.transferencia)}</td></tr><tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL VENTA RUTA:</strong></td><td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr></table></div><h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}<h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efectivo</th><th class="amount">Transf.</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table><div style="margin-top: 60px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div></div></body></html>`;
 };
 
 // --- HOOK DE DATOS ---
@@ -208,13 +320,9 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
         return allPendingInvoices.filter(inv => {
             const alreadySelected = selectedInvoices.some(sel => sel.id === inv.id);
             if (alreadySelected) return false;
-            
             const matchesZone = filterZone ? inv.zonaId === filterZone : true;
             const matchesVendor = filterVendor ? inv.vendedorId === filterVendor : true;
-            const matchesSearch = searchTerm 
-                ? (inv.clienteNombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                   inv.clienteDireccion.toLowerCase().includes(searchTerm.toLowerCase()))
-                : true;
+            const matchesSearch = searchTerm ? (inv.clienteNombre.toLowerCase().includes(searchTerm.toLowerCase()) || inv.clienteDireccion.toLowerCase().includes(searchTerm.toLowerCase())) : true;
             return matchesZone && matchesVendor && matchesSearch;
         }).sort((a, b) => (b.fechaCreacion?.seconds || 0) - (a.fechaCreacion?.seconds || 0));
     }, [allPendingInvoices, selectedInvoices, filterZone, filterVendor, searchTerm]);
@@ -246,19 +354,14 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
     return (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center animate-fade-in p-4">
             <div className="bg-white w-full max-w-7xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-                {/* HEADER */}
                 <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <TruckIcon className="text-indigo-600"/> {isReadOnly ? 'Monitor de Ruta' : (isEditMode ? 'Editar Ruta Activa' : 'Nueva Ruta')}
-                        </h2>
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><TruckIcon className="text-indigo-600"/> {isReadOnly ? 'Monitor de Ruta' : (isEditMode ? 'Editar Ruta Activa' : 'Nueva Ruta')}</h2>
                         <p className="text-xs text-gray-500 font-medium mt-1">ID: {route.nombre}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"><XIcon className="w-6 h-6" /></button>
                 </div>
-
                 <div className="flex-grow flex overflow-hidden">
-                    {/* IZQUIERDA (Origen) */}
                     {!isReadOnly && (
                         <div className="w-5/12 flex flex-col border-r border-gray-100 bg-gray-50/50">
                             <div className="p-4 space-y-3 border-b border-gray-100 bg-white/50 backdrop-blur-md">
@@ -290,6 +393,8 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                             <p className="font-bold text-gray-800 text-xs truncate">{inv.clienteNombre}</p>
                                             <p className="text-[10px] text-gray-500 truncate">{inv.clienteDireccion}</p>
                                             {inv.tipo === 'devolucion' && <span className="mt-1 inline-block text-[9px] font-bold bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-md border border-orange-100">DEVOLUCIÓN</span>}
+                                            {/* INDICADOR VISUAL SI REQUIERE AFIP */}
+                                            {inv.facturaAfip && <span className="ml-1 inline-block text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-100">AFIP</span>}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-gray-700 text-xs">{formatCurrency(inv.totalVenta)}</span>
@@ -300,8 +405,6 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                             </div>
                         </div>
                     )}
-
-                    {/* DERECHA (Destino) */}
                     <div className={`${isReadOnly ? 'w-full' : 'w-7/12'} flex flex-col bg-white relative`}>
                         <div className="p-4 border-b border-gray-100 bg-white z-10">
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Repartidor Asignado</label>
@@ -310,7 +413,6 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                 {repartidores.map(r => <option key={r.id} value={r.id}>{r.nombreCompleto}</option>)}
                             </select>
                         </div>
-
                         <div className="flex-grow overflow-y-auto p-3 space-y-2 bg-gray-50/30 custom-scrollbar">
                             {selectedInvoices.map((inv, index) => (
                                 <div key={inv.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm flex justify-between items-center group">
@@ -337,8 +439,6 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                 </div>
                             )}
                         </div>
-
-                        {/* FOOTER */}
                         {!isReadOnly && (
                             <div className="bg-white border-t border-gray-100 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
                                 <div className="flex justify-between items-center mb-4">
@@ -348,7 +448,7 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                     </div>
                                 </div>
                                 <button onClick={handleConfirmDispatch} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
-                                    {isDispatching ? <span className="animate-pulse">Procesando...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
+                                    {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
                                 </button>
                             </div>
                         )}
@@ -364,9 +464,8 @@ function Rutas() {
     const [isPlannerOpen, setIsPlannerOpen] = useState(false);
     const [selectedRoute, setSelectedRoute] = useState(null);
     const [activeTab, setActiveTab] = useState('planificacion');
-    const [plannerReadOnly, setPlannerReadOnly] = useState(false); // Nuevo estado para modo lectura
+    const [plannerReadOnly, setPlannerReadOnly] = useState(false);
 
-    // CONSULTA CORREGIDA: TRAE TODO LO QUE NO SEA 'Archivada' PERO AÑADIREMOS UN FILTRO EN MEMORIA PARA 'Archivada' EN EL TAB CORRESPONDIENTE
     const routesQuery = useMemo(() => query(collection(db, 'rutas'), orderBy('fechaCreacion', 'desc')), []);
     const invoicesQuery = useMemo(() => query(collection(db, 'ventas'), where('estado', '!=', 'Archivada')), []);
     const vendorsQuery = useMemo(() => query(collection(db, 'vendedores')), []);
@@ -379,17 +478,23 @@ function Rutas() {
     const { data: clientes, isLoading: clientesLoading } = useFirestoreSubscription(clientesQuery);
     const { data: zonas, isLoading: zonasLoading } = useFirestoreSubscription(zonasQuery);
     
+    // --- AQUÍ FUSIONAMOS LA INTELIGENCIA DEL CLIENTE CON LA FACTURA ---
     const enrichedInvoices = useMemo(() => {
         return allInvoices.map(invoice => {
             const cliente = clientes.find(c => c.id === invoice.clienteId);
             return { 
                 ...invoice, 
+                // Datos básicos
                 clienteNombre: cliente?.nombre || invoice.clientName || 'N/A', 
                 clienteDireccion: cliente?.direccion || 'N/A', 
                 zonaId: cliente?.zonaId || null,
-                numeroDocumento: cliente?.numeroDocumento,
-                tipoDocumento: cliente?.tipoDocumento,
-                vendedorId: invoice.vendedorId // Aseguramos que esto exista para el filtro
+                vendedorId: invoice.vendedorId,
+                
+                // DATOS CRÍTICOS PARA AFIP (Si la factura no los tiene, los sacamos del cliente)
+                // Esto asegura que la nube sepa qué hacer aunque la venta sea vieja
+                facturaAfip: invoice.facturaAfip ?? cliente?.requiereFacturaAfip ?? false,
+                clienteCondicionIVA: invoice.clienteCondicionIVA ?? cliente?.condicionIva ?? 'CF',
+                clienteCuit: invoice.clienteCuit ?? cliente?.numeroDocumento ?? '',
             };
         });
     }, [allInvoices, clientes]);
@@ -415,10 +520,47 @@ function Rutas() {
         } catch (error) { console.error("Error al crear la ruta:", error); }
     };
 
+    // --- LÓGICA DE DESPACHO INTELIGENTE (AFIP + PDF) ---
     const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen) => {
         const repartidor = allVendors.find(r => r.id === repartidorId);
-        const facturasAfipParaProcesar = facturas.filter(inv => inv.facturaAfip === true);
         
+        // 1. Identificar cuáles necesitan Factura AFIP y aún NO tienen CAE
+        const facturasAfipParaProcesar = facturas.filter(inv => inv.facturaAfip === true && !inv.afipCAE);
+        
+        // Clonamos para manipular los datos ANTES de imprimir (por si la BD tarda)
+        let facturasParaImprimir = [...facturas];
+
+        // 2. Si hay facturas pendientes de AFIP, llamamos a la nube
+        if (facturasAfipParaProcesar.length > 0) {
+            try {
+                // Llamada a Google Cloud Functions
+                const result = await emitirFacturas({ ventas: facturasAfipParaProcesar });
+                const resultadosAfip = result.data; // Array de resultados
+
+                // 3. "Estampamos" los CAEs recibidos en el array de memoria para que salgan en el PDF YA
+                const mapaResultados = new Map(resultadosAfip.map(r => [r.ventaId, r]));
+
+                facturasParaImprimir = facturasParaImprimir.map(inv => {
+                    const res = mapaResultados.get(inv.id);
+                    if (res && res.status === 'OK') {
+                        return {
+                            ...inv,
+                            afipCAE: res.detalle.cae,
+                            afipFechaVtoCAE: res.detalle.vtoCAE,
+                            afipNumeroComprobante: res.detalle.numero,
+                            afipLetra: res.detalle.tipoLetra
+                        };
+                    }
+                    return inv;
+                });
+
+            } catch (e) { 
+                console.error(e);
+                alert("ALERTA: Hubo un error al conectar con AFIP. Las facturas se generarán SIN CAE legal. Verifique la conexión.");
+            }
+        }
+
+        // 4. Actualizamos la Base de Datos (Esto corre en paralelo a la impresión)
         const originalRoute = routes.find(r => r.id === routeId);
         const originalInvoiceIds = (originalRoute?.facturas || []).map(f => f.id);
         const newInvoiceIds = facturas.map(f => f.id);
@@ -447,66 +589,60 @@ function Rutas() {
             });
         });
 
-        if (facturasAfipParaProcesar.length > 0) {
-            try { await emitirFacturas({ ventas: facturasAfipParaProcesar }); } catch (e) { alert("Error en AFIP: " + e.message); }
-        }
-
+        // 5. GENERACIÓN DE DOCUMENTACIÓN (PDFs)
         let allPrintContent = '';
-        const loadingReportHtml = generateLoadingReportHTML(facturas, selectedRoute?.nombre, repartidor?.nombreCompleto);
+        
+        // A. Reporte de Carga (Interno)
+        const loadingReportHtml = generateLoadingReportHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto);
         allPrintContent += `<div style="padding: 20px;">${loadingReportHtml}</div><div style="page-break-after: always;"></div>`;
-        for (const factura of facturas) {
+        
+        // B. Facturas Individuales (Cliente)
+        for (const factura of facturasParaImprimir) {
             const fullClient = clientes.find(c => c.id === factura.clienteId) || {};
             const zonaNombre = fullClient.zonaId ? (zonas.find(z => z.id === fullClient.zonaId)?.nombre || 'N/A') : 'N/A';
+            
+            // Aquí se genera el HTML con el CAE si corresponde
             const invoiceHtml = generateInvoiceHtmlContent(factura, fullClient, zonaNombre);
             allPrintContent += `<div style="padding: 20px;">${invoiceHtml}</div><div style="page-break-after: always;"></div>`;
         }
+        
         printHTML(`<html><body>${allPrintContent}</body></html>`);
     };
 
-    // --- MODIFICACIÓN CRÍTICA: CHECK DE EXISTENCIA DE FACTURAS ANTES DE ACTUALIZAR ---
     const handleCancelRoute = async (routeToCancel) => {
         if (!window.confirm(`¿ATENCIÓN: Anular y ELIMINAR la ruta "${routeToCancel.nombre}"?\n\nLas facturas volverán a estado 'Pendiente de Entrega' y la ruta desaparecerá.`)) return;
         try {
             await runTransaction(db, async (transaction) => {
                 const routeRef = doc(db, 'rutas', routeToCancel.id);
                 
-                // 1. Liberar facturas (CON CHECK DE EXISTENCIA)
-                for (const facturaRef of (routeToCancel.facturas || [])) {
-                    const invoiceRef = doc(db, 'ventas', facturaRef.id);
-                    const docSnap = await transaction.get(invoiceRef); // Verificar si existe
-                    if (docSnap.exists()) {
-                        transaction.update(invoiceRef, { estado: 'Pendiente de Entrega', rutaId: null });
+                // PASO 1: LECTURAS (Promise.all para optimizar)
+                const invoiceRefs = (routeToCancel.facturas || []).map(f => doc(db, 'ventas', f.id));
+                const invoiceSnaps = await Promise.all(invoiceRefs.map(ref => transaction.get(ref)));
+
+                // PASO 2: ESCRITURAS
+                invoiceSnaps.forEach((snap, index) => {
+                    if (snap.exists()) {
+                        transaction.update(invoiceRefs[index], { estado: 'Pendiente de Entrega', rutaId: null });
                     }
-                }
+                });
                 
-                // 2. Eliminar la ruta físicamente
                 transaction.delete(routeRef); 
             });
             alert("Ruta anulada y eliminada correctamente.");
         } catch (error) { console.error(error); alert("Error al anular: " + error.message); }
     };
 
-    const handleViewRoute = (route) => {
-        setSelectedRoute(route);
-        setPlannerReadOnly(true); // MODO SOLO LECTURA
-        setIsPlannerOpen(true);
-    };
-
-    const handleEditInProgress = (route) => {
-        setSelectedRoute(route);
-        setPlannerReadOnly(false); // MODO EDICIÓN
-        setIsPlannerOpen(true);
-    };
+    const handleViewRoute = (route) => { setSelectedRoute(route); setPlannerReadOnly(true); setIsPlannerOpen(true); };
+    const handleEditInProgress = (route) => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); };
 
     if (routesLoading || invoicesLoading || vendorsLoading || clientesLoading || zonasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
     }
 
-    // --- FILTROS DE ESTADOS ---
     const planificadas = routes.filter(r => r.estado === 'Planificada');
     const enCurso = routes.filter(r => r.estado === 'En Curso');
-    const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda'); // Rutas listas para rendir o rendidas parcialmente
-    const archivadas = routes.filter(r => r.estado === 'Archivada'); // Rutas ya cerradas/rendidas
+    const rendicion = routes.filter(r => r.estado === 'Completada' || r.estado === 'Adeuda'); 
+    const archivadas = routes.filter(r => r.estado === 'Archivada');
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen font-sans">
@@ -520,7 +656,6 @@ function Rutas() {
                 </button>
             </header>
 
-            {/* TABS PREMIUM (SEGMENTED CONTROL STYLE) */}
             <div className="flex justify-center mb-10">
                 <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-200 inline-flex relative">
                     <TabButton name="planificacion" activeTab={activeTab} onClick={setActiveTab}>Planificación ({planificadas.length})</TabButton>
@@ -534,12 +669,7 @@ function Rutas() {
                 {activeTab === 'planificacion' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {planificadas.map(route => (
-                            <RouteCard 
-                                key={route.id} 
-                                route={route} 
-                                onOpenPlanner={() => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); }} 
-                                allInvoices={enrichedInvoices} 
-                            />
+                            <RouteCard key={route.id} route={route} onOpenPlanner={() => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); }} allInvoices={enrichedInvoices} />
                         ))}
                         {planificadas.length === 0 && <EmptyState message="No hay rutas pendientes de planificación." />}
                     </div>
@@ -548,15 +678,7 @@ function Rutas() {
                 {activeTab === 'en_curso' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {enCurso.map(route => (
-                            <RouteCard 
-                                key={route.id} 
-                                route={route} 
-                                onOpenPlanner={() => handleViewRoute(route)} 
-                                onEdit={() => handleEditInProgress(route)}
-                                onCancel={() => handleCancelRoute(route)}
-                                allInvoices={enrichedInvoices} 
-                                readOnly={false}
-                            />
+                            <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} onEdit={() => handleEditInProgress(route)} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} readOnly={false} />
                         ))}
                         {enCurso.length === 0 && <EmptyState message="No hay camiones en la calle ahora mismo." />}
                     </div>
@@ -564,10 +686,8 @@ function Rutas() {
 
                 {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} />}
                 
-                {activeTab === 'anuladas' && ( // AHORA MUESTRA HISTORIAL DE ARCHIVADAS (RENDIDAS)
+                {activeTab === 'anuladas' && (
                     <div className="space-y-4">
-                         {/* Reutilizamos el TabContentRendicion porque ya tiene la lógica de mostrar totales y reporte,
-                             pero filtramos solo las archivadas */}
                         <TabContentRendicion routes={archivadas} allInvoices={enrichedInvoices} />
                         {archivadas.length === 0 && <EmptyState message="No hay historial de rutas rendidas." />}
                     </div>
@@ -576,14 +696,9 @@ function Rutas() {
 
             {isPlannerOpen && selectedRoute && (
                 <PlannerView 
-                    route={selectedRoute} 
-                    onClose={() => { setIsPlannerOpen(false); setSelectedRoute(null); }} 
-                    allPendingInvoices={pendingInvoices}
-                    repartidores={repartidoresOnly} 
-                    zonas={zonas}
-                    vendors={allVendors}
-                    onDispatch={handleDispatchRoute}
-                    isReadOnly={plannerReadOnly}
+                    route={selectedRoute} onClose={() => { setIsPlannerOpen(false); setSelectedRoute(null); }} 
+                    allPendingInvoices={pendingInvoices} repartidores={repartidoresOnly} zonas={zonas} vendors={allVendors}
+                    onDispatch={handleDispatchRoute} isReadOnly={plannerReadOnly}
                 />
             )}
         </div>
@@ -594,10 +709,7 @@ function Rutas() {
 const TabButton = ({ name, activeTab, onClick, children }) => {
     const isActive = activeTab === name;
     return (
-        <button 
-            onClick={() => onClick(name)} 
-            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-        >
+        <button onClick={() => onClick(name)} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
             {children}
         </button>
     );
@@ -626,7 +738,7 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
         'En Curso': { color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
         'Completada': { color: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
         'Adeuda': { color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-        'Archivada': { color: 'bg-gray-100 text-gray-700', dot: 'bg-gray-500' }, // NUEVO ESTADO
+        'Archivada': { color: 'bg-gray-100 text-gray-700', dot: 'bg-gray-500' },
         'Anulada': { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
     };
     const status = statusConfig[estado] || statusConfig['Planificada'];
@@ -641,18 +753,14 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                     <button onClick={onOpenPlanner} className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"><EditIcon/></button>
                 )}
             </div>
-
             <div className="relative z-10">
                 <h3 className="text-lg font-bold text-gray-900 mb-1 leading-tight">{nombre}</h3>
                 <p className="text-xs text-gray-500 font-medium flex items-center gap-1"><TruckIcon className="w-3 h-3"/> {repartidorNombre || 'Sin asignar'}</p>
             </div>
-
-            {/* Barra de Progreso Minimalista (ACTUALIZADA: 1/10) */}
             {(estado === 'En Curso' || estado === 'Completada' || estado === 'Adeuda') && (
                 <div className="mt-6 mb-2">
                     <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1.5">
                         <span>PROGRESO</span>
-                        {/* CAMBIO SOLICITADO: Mostrar Fracción en lugar de Porcentaje */}
                         <span>{liveStats.completed} / {liveStats.total}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -660,22 +768,13 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                     </div>
                 </div>
             )}
-
-            {/* BOTONERA DE ACCIONES FLOTANTES (SOLO EN CURSO) */}
             {estado === 'En Curso' && !readOnly && (
                 <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-dashed border-gray-100">
-                    <button onClick={onOpenPlanner} title="Monitorizar" className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 hover:scale-110 transition-all shadow-sm border border-blue-100">
-                        <EyeIcon className="w-5 h-5"/>
-                    </button>
-                    <button onClick={onEdit} title="Editar Ruta" className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm border border-yellow-100">
-                        <EditIcon className="w-5 h-5"/>
-                    </button>
-                    <button onClick={onCancel} title="Anular y Eliminar" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100">
-                        <TrashIcon className="w-5 h-5"/>
-                    </button>
+                    <button onClick={onOpenPlanner} title="Monitorizar" className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 hover:scale-110 transition-all shadow-sm border border-blue-100"><EyeIcon className="w-5 h-5"/></button>
+                    <button onClick={onEdit} title="Editar Ruta" className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm border border-yellow-100"><EditIcon className="w-5 h-5"/></button>
+                    <button onClick={onCancel} title="Anular y Eliminar" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100"><TrashIcon className="w-5 h-5"/></button>
                 </div>
             )}
-
             {estado === 'Planificada' && !readOnly && (
                 <button onClick={onOpenPlanner} className="mt-6 w-full py-3 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-md">
                     GESTIONAR <ArrowRightIcon className="w-3 h-3"/>
@@ -685,160 +784,43 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
     );
 };
 
-// --- COMPONENTE RENDICIÓN REDISEÑADO (AUTOMÁTICO) ---
 const TabContentRendicion = ({ routes, allInvoices }) => {
     const [expandedRouteId, setExpandedRouteId] = useState(null);
-
     const handleArchiveRoute = async (route) => {
         if (!window.confirm(`¿Confirmar cierre de ruta "${route.nombre}"?\n\nSe archivará la ruta y se liberará al repartidor.`)) return;
-        try {
-            await updateDoc(doc(db, 'rutas', route.id), { 
-                estado: 'Archivada', 
-                fechaCierre: Timestamp.now() 
-            });
-            alert("Ruta cerrada y archivada.");
-        } catch (e) { console.error(e); alert("Error al cerrar."); }
+        try { await updateDoc(doc(db, 'rutas', route.id), { estado: 'Archivada', fechaCierre: Timestamp.now() }); alert("Ruta cerrada y archivada."); } catch (e) { console.error(e); alert("Error al cerrar."); }
     };
-
-    // --- NUEVA FUNCIÓN PARA BORRAR HISTORIAL ---
     const handleDeleteArchivedRoute = async (routeId) => {
         if(!window.confirm("¿Eliminar este registro del historial? Esta acción es irreversible.")) return;
-        try {
-            await deleteDoc(doc(db, 'rutas', routeId));
-            // No es necesario alerta si se borra de la UI automáticamente por el listener
-        } catch(e) { console.error(e); alert("Error al eliminar."); }
+        try { await deleteDoc(doc(db, 'rutas', routeId)); } catch(e) { console.error(e); alert("Error al eliminar."); }
     }
-
     return (
         <div className="space-y-4 animate-fade-in">
             {routes.map(route => {
                 const routeInvoices = allInvoices.filter(i => (route.facturas || []).some(f => f.id === i.id));
-                const totals = routeInvoices.reduce((acc, i) => ({
-                    efectivo: acc.efectivo + (i.pagoEfectivo || 0),
-                    transferencia: acc.transferencia + (i.pagoTransferencia || 0),
-                    pendiente: acc.pendiente + (i.saldoPendiente || 0),
-                    total: acc.total + (i.totalVenta || 0)
-                }), { efectivo: 0, transferencia: 0, pendiente: 0, total: 0 });
-
-                // --- CALCULO AUTOMATICO DE DEVOLUCIONES PARA UI ---
-                const devolucionesSummary = new Map();
-                routeInvoices.forEach(invoice => {
-                    if (invoice.estado === 'Anulada') {
-                        (invoice.items || []).forEach(item => {
-                            const qty = item.originalQuantity || item.quantity;
-                            if (!qty) return;
-                            const key = item.productId || item.nombre;
-                            const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
-                            devolucionesSummary.set(key, { ...existing, quantity: existing.quantity + qty });
-                        });
-                    } else {
-                        (invoice.items || []).forEach(item => {
-                            const original = item.originalQuantity !== undefined ? item.originalQuantity : item.quantity;
-                            const final = item.quantity;
-                            const diff = original - final;
-                            if (diff > 0) {
-                                const key = item.productId || item.nombre;
-                                const existing = devolucionesSummary.get(key) || { nombre: item.nombre, quantity: 0 };
-                                devolucionesSummary.set(key, { ...existing, quantity: existing.quantity + diff });
-                            }
-                        });
-                    }
-                });
-                const returnsList = Array.from(devolucionesSummary.values());
-
+                const totals = routeInvoices.reduce((acc, i) => ({ efectivo: acc.efectivo + (i.pagoEfectivo || 0), transferencia: acc.transferencia + (i.pagoTransferencia || 0), pendiente: acc.pendiente + (i.saldoPendiente || 0), total: acc.total + (i.totalVenta || 0) }), { efectivo: 0, transferencia: 0, pendiente: 0, total: 0 });
                 const isExpanded = expandedRouteId === route.id;
                 const isArchived = route.estado === 'Archivada';
-
                 return (
                     <div key={route.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-md">
                         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}>
                             <div className="flex items-center gap-4">
                                 <div className={`${isArchived ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-600'} p-3 rounded-full`}><TruckIcon className="w-6 h-6"/></div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900">{route.nombre}</h3>
-                                    <p className="text-sm text-gray-500 font-medium">{route.repartidorNombre} {isArchived && <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">FINALIZADA</span>}</p>
-                                </div>
+                                <div><h3 className="text-lg font-bold text-gray-900">{route.nombre}</h3><p className="text-sm text-gray-500 font-medium">{route.repartidorNombre} {isArchived && <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">FINALIZADA</span>}</p></div>
                             </div>
                             <div className="flex items-center gap-8">
-                                <div className="text-right hidden md:block">
-                                    <span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (Total)'}</span>
-                                    <span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia)}</span>
-                                </div>
-                                <button className={`w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-gray-200' : ''}`}>
-                                    <ChevronDownIcon className="w-5 h-5 text-gray-600"/>
-                                </button>
+                                <div className="text-right hidden md:block"><span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (Total)'}</span><span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia)}</span></div>
+                                <button className={`w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-gray-200' : ''}`}><ChevronDownIcon className="w-5 h-5 text-gray-600"/></button>
                             </div>
                         </div>
-
                         {isExpanded && (
                             <div className="bg-gray-50/50 border-t border-gray-100 p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                    {/* CARD 1: EFECTIVO */}
-                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <span className="text-xs font-bold text-gray-400 uppercase">{isArchived ? 'RENDIDO (CAJA)' : 'A RECIBIR (CAJA)'}</span>
-                                            <div className="bg-green-50 p-2 rounded-lg text-green-600"><TruckIcon className="w-4 h-4"/></div>
-                                        </div>
-                                        <div>
-                                            <p className="text-3xl font-extrabold text-gray-900">{formatCurrency(totals.efectivo)}</p>
-                                            <p className="text-xs text-gray-500 mt-1">Dinero físico rendido</p>
-                                        </div>
-                                    </div>
-
-                                    {/* CARD 2: BANCO/CTA CTE */}
-                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <span className="text-xs font-bold text-gray-400 uppercase">BANCO Y FIADO</span>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-600">Transferencias:</span>
-                                                <span className="font-bold text-gray-900">{formatCurrency(totals.transferencia)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-600">Deuda Clientes:</span>
-                                                <span className="font-bold text-red-600">{formatCurrency(totals.pendiente)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* CARD 3: STOCK */}
-                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-bold text-gray-400 uppercase">CONTROL DE STOCK</span>
-                                            <div className="bg-orange-50 p-2 rounded-lg text-orange-600"><PackageIcon className="w-4 h-4"/></div>
-                                        </div>
-                                        <div className="flex-grow overflow-y-auto custom-scrollbar max-h-[100px]">
-                                            {returnsList.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {returnsList.map((item, idx) => (
-                                                        <li key={idx} className="flex justify-between text-xs border-b border-gray-50 py-1 last:border-0">
-                                                            <span className="text-gray-700 truncate mr-2">{item.nombre}</span>
-                                                            <span className="font-bold text-gray-900 bg-gray-100 px-1.5 rounded">{item.quantity}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p className="text-xs text-gray-400 italic mt-2">No hay devoluciones.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-4">
-                                    <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices))} className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-all flex justify-center items-center gap-2">
-                                        <PrinterIcon className="w-5 h-5 text-gray-500"/> {isArchived ? 'Reimprimir Reporte' : 'Imprimir Reporte'}
-                                    </button>
-                                    
-                                    {/* Si NO está archivada, muestra el botón para cerrar. Si YA lo está, muestra el botón ELIMINAR */}
+                                <div className="flex justify-end gap-4">
+                                    <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices))} className="py-3 px-6 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 flex items-center gap-2"><PrinterIcon className="w-5 h-5 text-gray-500"/> {isArchived ? 'Reimprimir Reporte' : 'Imprimir Reporte'}</button>
                                     {!isArchived ? (
-                                        <button onClick={() => handleArchiveRoute(route)} className="flex-[2] py-3 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
-                                            <ArchiveIcon className="w-5 h-5"/> Confirmar y Cerrar Ruta
-                                        </button>
+                                        <button onClick={() => handleArchiveRoute(route)} className="py-3 px-6 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-black flex items-center gap-2"><ArchiveIcon className="w-5 h-5"/> Confirmar y Cerrar Ruta</button>
                                     ) : (
-                                        <button onClick={() => handleDeleteArchivedRoute(route.id)} className="flex-[2] py-3 bg-red-50 text-red-600 border border-red-100 font-bold rounded-xl hover:bg-red-100 transition-all flex justify-center items-center gap-2">
-                                            <TrashIcon className="w-5 h-5"/> Eliminar del Historial
-                                        </button>
+                                        <button onClick={() => handleDeleteArchivedRoute(route.id)} className="py-3 px-6 bg-red-50 text-red-600 border border-red-100 font-bold rounded-xl hover:bg-red-100 flex items-center gap-2"><TrashIcon className="w-5 h-5"/> Eliminar del Historial</button>
                                     )}
                                 </div>
                             </div>
