@@ -7,6 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { toast } from 'react-toastify'; // Importamos toast para usarlo en los eventos
 
 // Componentes
+import LandingPage from './components/landingPage.jsx'; // ✅ Asegúrate que el archivo se llame así (PascalCase) o ajusta a 'landingPage.jsx'
 import LoginScreen from './components/LoginScreen.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CatalogoPublico from './components/CatalogoPublico.jsx'; 
@@ -82,6 +83,10 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
         <Routes>
           
+          {/* --- RUTA LANDING PAGE (INFO) --- */}
+          {/* Ahora accesible en tudominio.com/informacion */}
+          <Route path="/informacion" element={<LandingPage />} />
+
           {/* --- RUTA PÚBLICA (Catálogo) --- */}
           <Route path="/catalogo/:lista?" element={<CatalogoPublico />} />
 
