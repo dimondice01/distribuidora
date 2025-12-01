@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom'; // 1. IMPORTAMOS useSearchParams
+import { useParams, useSearchParams } from 'react-router-dom'; 
 import { db } from '../firebase'; 
-import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore'; // 2. IMPORTAMOS doc y getDoc
+import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore'; 
 
 // --- Iconos Estilo iOS ---
 const CartIcon = ({ count }) => (
@@ -23,11 +23,24 @@ const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" view
 const CloseIcon = () => <svg className="w-8 h-8 text-gray-500 bg-gray-100 rounded-full p-1.5 hover:bg-gray-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 const GiftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clipRule="evenodd" /><path d="M9 11H3v5a2 2 0 002 2h4v-7zM11 18h4a2 2 0 002-2v-5h-6v7z" /></svg>;
 const FireIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.45-.412-1.725a1 1 0 00-1.457-.895c-1.387.634-2.182 2.055-2.019 3.789.164 1.734 1.391 3.158 2.793 3.975C7.548 16.049 9.73 16.5 11.976 15.46c2.246-1.04 3.596-3.507 3.35-5.854-.123-1.174-.842-2.165-1.91-2.719a5.838 5.838 0 00-1.021-.334z" clipRule="evenodd" /></svg>;
-const UserCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>; // Icono Vendedor
+const UserCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>; 
+const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+
+// --- COMPONENTE VISUAL: SKELETON CARD (Para carga elegante) ---
+const SkeletonProduct = () => (
+  <div className="bg-white rounded-[1.5rem] p-3 border border-gray-100 shadow-sm">
+    <div className="aspect-square bg-gray-100 rounded-2xl mb-3 animate-pulse"></div>
+    <div className="space-y-2 mb-3">
+      <div className="h-4 bg-gray-100 rounded-lg w-3/4 animate-pulse"></div>
+      <div className="h-4 bg-gray-100 rounded-lg w-1/3 animate-pulse"></div>
+    </div>
+    <div className="h-10 bg-gray-100 rounded-xl w-full animate-pulse"></div>
+  </div>
+);
 
 export default function CatalogoPublico() {
   const { lista } = useParams(); 
-  const [searchParams] = useSearchParams(); // 3. LEEMOS PARAMETROS URL
+  const [searchParams] = useSearchParams(); 
   
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -36,12 +49,20 @@ export default function CatalogoPublico() {
   const [cart, setCart] = useState({}); 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  
+  // --- PAGINACIÓN ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // --- ESTADO DE CONFIRMACIÓN ---
+  const [showSuccess, setShowSuccess] = useState(false);
+
   // --- LÓGICA VENDEDOR B2B ---
-  const [vendorData, setVendorData] = useState(null); // { nombre: '', telefono: '' }
+  const [vendorData, setVendorData] = useState(null); 
 
   // --- Modal Cantidad ---
   const [qtyModalOpen, setQtyModalOpen] = useState(false);
@@ -72,7 +93,7 @@ export default function CatalogoPublico() {
 
   // 4. DETECTAR Y CARGAR VENDEDOR (B2B)
   useEffect(() => {
-      const vendorId = searchParams.get('v'); // Buscamos ?v=ID_VENDEDOR
+      const vendorId = searchParams.get('v'); 
       if (vendorId) {
           const fetchVendor = async () => {
               try {
@@ -82,7 +103,7 @@ export default function CatalogoPublico() {
                       const data = docSnap.data();
                       setVendorData({
                           nombre: data.nombreCompleto,
-                          telefono: data.telefono || '' // Prioridad al teléfono guardado
+                          telefono: data.telefono || '' 
                       });
                   }
               } catch (error) {
@@ -92,6 +113,11 @@ export default function CatalogoPublico() {
           fetchVendor();
       }
   }, [searchParams]);
+
+  // Resetear página al filtrar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory]);
 
   // 2. Helper de Precio Base
   const getProductBasePrice = (product) => {
@@ -115,7 +141,6 @@ export default function CatalogoPublico() {
     return { finalPrice, originalPrice: basePrice, isPromo };
   };
 
-  // Helper para Badge de Promoción
   const getProductPromoBadge = (product) => {
       const promo = promotions.find(p => p.productoIds?.includes(product.id));
       if (!promo) return null;
@@ -213,6 +238,12 @@ export default function CatalogoPublico() {
     });
   }, [products, searchTerm, selectedCategory]);
 
+  // --- LÓGICA DE PAGINACIÓN ---
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+
   const updateCartQty = (id, qty) => {
     setCart(prev => {
       const newCart = { ...prev };
@@ -235,6 +266,7 @@ export default function CatalogoPublico() {
     setQtyModalOpen(false);
   };
 
+  // --- CHECKOUT Y CONFIRMACIÓN ---
   const handleCheckout = () => {
     const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
     if (totalItems === 0) return;
@@ -268,22 +300,45 @@ export default function CatalogoPublico() {
     message += `\n\n📍 *[TOCA AQUÍ PARA CARGAR EN APP]* 👇\n`;
     
     const jsonPayload = JSON.stringify(itemsForLink);
-    // 5. PRESERVAR VENDEDOR: Incluimos el ?v=ID también en el link de deep linking (opcional, por si quieres trackearlo luego)
     const vendorParam = searchParams.get('v') ? `&v=${searchParams.get('v')}` : '';
     const webLink = `${window.location.origin}/abrir-pedido?data=${encodeURIComponent(jsonPayload)}${vendorParam}`;
     message += webLink;
 
-    // 6. DESTINO DINÁMICO: Si hay teléfono de vendedor, úsalo. Si no, genérico.
-    const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; // Limpia caracteres no numéricos
+    const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; 
     const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
     
+    // 1. ABRIR WHATSAPP
     window.open(whatsappUrl, '_blank');
+
+    // 2. REINICIAR Y CONFIRMAR
+    setCart({}); // Vaciar carrito
+    setIsCartOpen(false); // Cerrar bottom sheet
+    setShowSuccess(true); // Mostrar mensaje de éxito
   };
 
+  // --- CARGA ELEGANTE: SKELETON SCREEN ---
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-400 font-medium animate-pulse">Cargando catálogo...</p>
+    <div className="min-h-screen bg-white font-sans text-gray-900 pb-32">
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-100/50">
+            <div className="max-w-5xl mx-auto px-4 pt-4 pb-2">
+                <div className="flex justify-between items-center mb-3">
+                    <div className="space-y-2">
+                        <div className="h-8 w-32 bg-gray-100 rounded-lg animate-pulse"></div>
+                        <div className="h-4 w-48 bg-gray-50 rounded-lg animate-pulse"></div>
+                    </div>
+                    <div className="h-10 w-10 bg-gray-100 rounded-full animate-pulse"></div>
+                </div>
+                <div className="w-full h-12 bg-gray-100 rounded-2xl animate-pulse mb-3"></div>
+                <div className="flex gap-2 overflow-hidden">
+                    {[1,2,3,4].map(i => <div key={i} className="h-9 w-24 bg-gray-100 rounded-full animate-pulse"></div>)}
+                </div>
+            </div>
+        </div>
+        <div className="max-w-5xl mx-auto p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {[...Array(8)].map((_, i) => <SkeletonProduct key={i} />)}
+            </div>
+        </div>
     </div>
   );
 
@@ -299,7 +354,6 @@ export default function CatalogoPublico() {
                         <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Catálogo</h1>
                         {lista && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide border border-blue-100">{lista}</span>}
                     </div>
-                    {/* 7. VISUALIZACIÓN DEL VENDEDOR */}
                     {vendorData && (
                         <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5 animate-fade-in">
                             <UserCheckIcon className="w-3 h-3 text-green-500"/> 
@@ -323,7 +377,6 @@ export default function CatalogoPublico() {
                 <span className="absolute left-3 top-3.5"><SearchIcon /></span>
             </div>
 
-            {/* Categorías y Botón Promociones */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 items-center">
                 <button 
                     onClick={() => setIsPromoModalOpen(true)}
@@ -353,10 +406,10 @@ export default function CatalogoPublico() {
         </div>
       </div>
 
-      {/* --- GRILLA --- */}
+      {/* --- GRILLA CON PAGINACIÓN --- */}
       <div className="max-w-5xl mx-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredProducts.map(product => {
+            {currentItems.map(product => {
                 const { finalPrice, originalPrice, isPromo } = getProductBasePrice(product);
                 const promoBadge = getProductPromoBadge(product); 
                 const qty = cart[product.id] || 0;
@@ -364,7 +417,6 @@ export default function CatalogoPublico() {
                 return (
                 <div key={product.id} className={`group bg-white rounded-[1.5rem] p-3 border transition-all duration-300 relative ${qty > 0 ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'border-gray-100 hover:shadow-xl hover:border-gray-200'}`}>
                     
-                    {/* Imagen + Badges */}
                     <div 
                         className="aspect-square bg-gray-50 rounded-2xl relative cursor-pointer overflow-hidden mb-3"
                         onClick={() => openQtyModal(product)}
@@ -391,7 +443,6 @@ export default function CatalogoPublico() {
                         {qty > 0 && <div className="absolute bottom-2 right-2 bg-blue-600 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white z-10">{qty}</div>}
                     </div>
                     
-                    {/* Info (Altura Fija) */}
                     <div className="flex flex-col justify-between h-[6.5rem]">
                         <div>
                             <h3 className="text-[15px] font-bold text-gray-900 leading-tight line-clamp-2 mb-1 h-[2.4rem]" title={product.nombre}>
@@ -413,6 +464,38 @@ export default function CatalogoPublico() {
                 );
             })}
         </div>
+        
+        {/* --- CONTROLES DE PAGINACIÓN --- */}
+        {filteredProducts.length > itemsPerPage && (
+            <div className="flex justify-center items-center gap-4 mt-8">
+                <button 
+                    onClick={() => {
+                        setCurrentPage(prev => Math.max(prev - 1, 1));
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === 1}
+                    className={`px-4 py-2 rounded-xl font-bold transition-colors ${currentPage === 1 ? 'text-gray-300 bg-gray-50' : 'text-gray-700 bg-gray-100 hover:bg-gray-200'}`}
+                >
+                    Anterior
+                </button>
+                
+                <span className="text-sm font-medium text-gray-500">
+                    Página <span className="text-gray-900 font-bold">{currentPage}</span> de {totalPages}
+                </span>
+
+                <button 
+                    onClick={() => {
+                        setCurrentPage(prev => Math.min(prev + 1, totalPages));
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === totalPages}
+                    className={`px-4 py-2 rounded-xl font-bold transition-colors ${currentPage === totalPages ? 'text-gray-300 bg-gray-50' : 'text-gray-700 bg-gray-100 hover:bg-gray-200'}`}
+                >
+                    Siguiente
+                </button>
+            </div>
+        )}
+
         {filteredProducts.length === 0 && <div className="text-center py-20 text-gray-400 font-medium">No se encontraron productos.</div>}
       </div>
 
@@ -472,6 +555,27 @@ export default function CatalogoPublico() {
                         <button type="submit" className="py-3.5 rounded-2xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200 transition-colors">Confirmar</button>
                     </div>
                 </form>
+            </div>
+        </div>
+      )}
+
+      {/* --- MODAL ÉXITO (CONFIRMACIÓN) --- */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-fade-in">
+            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl scale-100 transition-transform">
+                <div className="mb-6 animate-bounce-short">
+                    <CheckCircleIcon />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900 mb-2">¡Pedido Completado!</h2>
+                <p className="text-gray-500 mb-8 font-medium leading-relaxed">
+                    Muchas gracias por tu compra.
+                </p>
+                <button 
+                    onClick={() => setShowSuccess(false)}
+                    className="w-full py-4 rounded-2xl font-bold text-white text-lg bg-green-500 hover:bg-green-600 shadow-xl shadow-green-200 transition-all active:scale-95"
+                >
+                    Aceptar
+                </button>
             </div>
         </div>
       )}
