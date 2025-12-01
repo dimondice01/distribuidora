@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // Importamos 'app' además de 'db'
-import { db, app } from '../firebase.js'; 
+import { db, app, auth } from '../firebase.js'; 
 import { collection, onSnapshot, orderBy, query, getDocs, doc, runTransaction, Timestamp, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
 // Importamos las funciones de la Nube
-import { getFunctions as getFunctionsFromApp, httpsCallable } from 'firebase/functions'; 
+import { getFunctions, httpsCallable } from 'firebase/functions'; 
+
+// Inicializamos Cloud Functions
+const functions = getFunctions(app);
+const emitirFacturaCloud = httpsCallable(functions, 'emitirFacturasReparto');
 
 // --- ICONOGRAFÍA PREMIUM (Stroke 1.5, Rounded) ---
 const Icono = ({ path, d2, className = "w-5 h-5" }) => (
@@ -20,17 +24,18 @@ const PrintIcon = () => <Icono path="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.0
 const DollarSignIcon = () => <Icono path="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-6 h-6"/>;
 const BarChartIcon = () => <Icono path="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" className="w-6 h-6"/>;
 const TrashIcon = () => <Icono path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456-1.278A11.862 11.862 0 0020.62 6m-14.456.374a11.862 11.862 0 00-.87 5.143" />;
-const BarcodeIcon = () => <Icono path="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" d2="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />;
+const BarcodeIcon = (props) => <Icono path="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" d2="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />;
 const XIcon = () => <Icono path="M6 18L18 6M6 6l12 12" />;
 const SearchIcon = () => <Icono path="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />;
 const CheckIcon = () => <Icono path="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />;
+const CardIcon = () => <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />;
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
-// Función helper para calcular costo desde items (solo usada al CREAR o si falta el total)
+// Función helper para calcular costo
 const calculateTotalCostoFromItems = (items) => (items || []).reduce((total, item) => total + ((item.costo || 0) * (item.quantity || 0)), 0);
 
-// Función helper para calcular comisión desde items
+// Función helper para calcular comisión
 const calculateTotalComisionFromItems = (items = []) => {
     return items.reduce((total, item) => {
         return total + (Number(item.comision) || 0); 
@@ -52,44 +57,190 @@ const calculateTotalNetProfit = (venta) => {
     return totalVenta - totalCosto - totalComision;
 };
 
+// --- FUNCIÓN DE IMPRESIÓN CON QR AFIP & LOGO NOAR ERP ---
 const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
-    const fechaImpresion = venta.fecha instanceof Timestamp ? venta.fecha.toDate() : (venta.fecha || new Date()); 
+    const fechaImpresion = venta.fecha instanceof Timestamp ? venta.fecha.toDate() : (venta.fecha || new Date());
+    
+    // Datos AFIP
+    const tieneCAE = !!venta.afipCAE;
+    const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
+    const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
+    const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
+    const numCompStr = String(venta.afipNumeroComprobante || venta.id.substring(0, 8)).padStart(8, '0');
+    
+    // Generación QR (Solo si tiene CAE)
+    let qrHtml = '';
+    if (tieneCAE) {
+        const datosQr = {
+            ver: 1,
+            fecha: fechaImpresion.toISOString().split('T')[0],
+            cuit: 27278612932, // TU CUIT
+            ptoVta: 5,
+            tipoCmp: letra === 'A' ? 1 : (letra === 'B' ? 6 : 11),
+            nroCmp: parseInt(venta.afipNumeroComprobante || 0),
+            importe: parseFloat(venta.totalVenta),
+            moneda: "PES",
+            ctz: 1,
+            codAut: parseInt(venta.afipCAE)
+        };
+        const jsonString = JSON.stringify(datosQr);
+        const base64Data = btoa(jsonString); 
+        const urlAfip = `https://www.afip.gob.ar/fe/qr/?p=${base64Data}`;
+        const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(urlAfip)}`;
+        
+        qrHtml = `
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+                <img src="${qrImgUrl}" alt="QR AFIP" style="width: 80px; height: 80px; border: 1px solid #ddd;" />
+                <div style="font-size: 10px; font-weight: bold;">
+                    <span style="font-style: italic;">CAE: ${venta.afipCAE}</span><br>
+                    <span>Vto. CAE: ${venta.afipFechaVtoCAE || ''}</span>
+                </div>
+            </div>
+        `;
+    }
+
     const itemsHtml = (venta.items || []).map(item => `
-        <tr class="item"><td>${item.nombre}</td><td class="text-center">${item.quantity}</td><td class="text-right">${formatCurrency(item.precio)}</td><td class="text-right">${formatCurrency(item.quantity * item.precio)}</td></tr>
-        ${item.promoAplicada ? `<tr class="promotion"><td colspan="4"><span class="promo-tag">Promo Aplicada:</span> ${item.promoAplicada}</td></tr>` : ''}
+        <tr style="border-bottom: 1px solid #ccc;">
+            <td style="padding: 5px;">${item.nombre}</td>
+            <td style="text-align: center; padding: 5px;">${item.quantity}</td>
+            <td style="text-align: right; padding: 5px;">${formatCurrency(item.precio)}</td>
+            <td style="text-align: right; padding: 5px;">${formatCurrency(item.quantity * item.precio)}</td>
+        </tr>
     `).join('');
+
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
-        <html><head><title>Factura #${venta.numeroFactura || venta.id.substring(0,8)}</title><style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 20px; font-size: 12px; color: #333; } .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,.15); border-radius: 8px; } h1, h2, h3 { margin: 0; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; } .header .company-details { text-align: left; } .header .invoice-details { text-align: right; } .details-table { width: 100%; border-collapse: collapse; margin-top: 20px; } .details-table th, .details-table td { padding: 10px; border-bottom: 1px solid #eee; } .details-table thead th { background-color: #f7f7f7; font-weight: 600; text-transform: uppercase; font-size: 11px; color: #555; } .text-right { text-align: right; } .text-center { text-align: center; } .totals-table { width: 40%; margin-left: 60%; margin-top: 20px; } .totals-table td { padding: 8px; } .totals-table .total { font-size: 1.2em; font-weight: bold; border-top: 2px solid #333; } .client-info { margin-top: 30px; padding: 15px; background-color: #f7f7f7; border-radius: 5px; } .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #888; } .promotion { font-size: 11px; color: #555; background-color: #f0fff4; } .promo-tag { font-weight: bold; color: #10B981; }
-        </style></head><body><div class="invoice-box">
-            <div class="header"><div class="company-details"><h1>Tu Distribuidora</h1><p>Dirección, Ciudad<br>Teléfono</p></div><div class="invoice-details"><h2>FACTURA</h2><p><strong>Nº:</strong> ${venta.numeroFactura || venta.id.substring(0, 8)}<br><strong>Fecha:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br><strong>Vendedor:</strong> ${venta.vendedorNombre || 'N/A'}</p></div></div>
-            <div class="client-info"><strong>Cliente:</strong> ${venta.clienteNombre || 'Consumidor Final'}<br><strong>Dirección:</strong> ${clientDetails.direccion || 'N/A'}<br><strong>Teléfono:</strong> ${clientDetails.telefono || 'N/A'} | <strong>CUIT/DNI:</strong> ${clientDetails.cuit || clientDetails.dni || 'N/A'}<br><strong>Zona:</strong> ${zonaNombre}</div>
-            <table class="details-table"><thead><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-right">P. Unit.</th><th class="text-right">Subtotal</th></tr></thead><tbody>${itemsHtml}</tbody></table>
-            <table class="totals-table"><tr class="total"><td>TOTAL</td><td class="text-right">${formatCurrency(venta.totalVenta)}</td></tr></table>
-            ${venta.observaciones ? `<div class="mt-4 p-3 border rounded-md text-sm bg-gray-50"><strong>Observaciones:</strong> ${venta.observaciones}</div>` : ''}
-            <div class="footer">Gracias por su compra. El estado de esta factura es: <strong>${venta.estado}</strong>.</div>
-        </div></body></html>`);
+        <html>
+        <head>
+            <title>${tituloComprobante} #${numCompStr}</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; font-size: 12px; color: #333; }
+                .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,.15); border-radius: 8px; }
+                
+                /* HEADER STYLES */
+                .header { display: flex; justify-content: space-between; border-bottom: 2px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
+                .company-info { width: 50%; }
+                
+                /* LOGO NOAR ERP INTEGRADO */
+                .logo-container { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+                .logo-icon { width: 30px; height: 30px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 18px; font-family: Arial, sans-serif; }
+                .logo-text { font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px; font-family: Arial, sans-serif; }
+                
+                .letter-box { width: 50px; height: 50px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; background: #f9f9f9; }
+                .invoice-data { text-align: right; width: 40%; }
+                
+                .client-info { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #3498db; }
+                
+                table { width: 100%; border-collapse: collapse; }
+                th { background: #e9ecef; text-transform: uppercase; font-size: 11px; padding: 10px; text-align: left; }
+                td { padding: 10px; }
+                
+                .text-right { text-align: right; }
+                .text-center { text-align: center; }
+                .total-row td { border-top: 2px solid #333; font-weight: bold; font-size: 14px; padding-top: 10px; }
+                
+                .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="invoice-box">
+                <div class="header">
+                    <div class="company-info">
+                        <div class="logo-container">
+                            <div class="logo-icon">N</div>
+                            <div class="logo-text">NOAR <span style="color: #d97706; font-weight: 300; letter-spacing: 2px; font-size: 14px;">ERP</span></div>
+                        </div>
+                        <p style="margin: 0; font-size: 10px; color: #666;">
+                            <strong>Distribuidora La Llave</strong><br>
+                            Razón Social: Tu Nombre<br>
+                            Dirección: Dirección Real, La Rioja<br>
+                            Condición IVA: Monotributo
+                        </p>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+                        <div class="letter-box">${letra}</div>
+                        <span style="font-size: 9px; margin-top: 5px;">${codComprobante}</span>
+                    </div>
+
+                    <div class="invoice-data">
+                        <h2 style="margin: 0; color: #333;">${tituloComprobante}</h2>
+                        <p style="font-size: 11px; line-height: 1.5;">
+                            <strong>Nº:</strong> 00005-${numCompStr}<br>
+                            <strong>Fecha:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                            <strong>CUIT:</strong> 27-27861293-2
+                        </p>
+                    </div>
+                </div>
+
+                <div class="client-info">
+                    <strong>Cliente:</strong> ${venta.clienteNombre || 'Consumidor Final'}<br>
+                    <strong>CUIT/DNI:</strong> ${venta.clienteCuit || clientDetails.cuit || clientDetails.dni || 'S/D'}<br>
+                    <strong>Dirección:</strong> ${clientDetails.direccion || 'N/A'} (${zonaNombre})<br>
+                    <strong>Condición IVA:</strong> ${venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : 'Consumidor Final'}
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="50%">Producto</th>
+                            <th width="10%" class="text-center">Cant.</th>
+                            <th width="20%" class="text-right">Precio Unit.</th>
+                            <th width="20%" class="text-right">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="3" class="text-right">TOTAL</td>
+                            <td class="text-right">${formatCurrency(venta.totalVenta)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                ${qrHtml}
+
+                <div class="footer">
+                    Documento generado por <strong>Noar ERP</strong>.
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
     printWindow.document.close();
-    printWindow.print();
+    setTimeout(() => printWindow.print(), 1000); 
 };
 
 const CollectSaleModal = ({ total, onConfirm, onClose }) => {
     const [pagoEfectivo, setPagoEfectivo] = useState('');
     const [pagoTransferencia, setPagoTransferencia] = useState('');
+    const [pagoTarjeta, setPagoTarjeta] = useState('');
+    const [nroCupon, setNroCupon] = useState('');
     const [error, setError] = useState('');
-    const totalPagado = (parseFloat(pagoEfectivo) || 0) + (parseFloat(pagoTransferencia) || 0);
+    
+    const totalPagado = (parseFloat(pagoEfectivo) || 0) + (parseFloat(pagoTransferencia) || 0) + (parseFloat(pagoTarjeta) || 0);
     const saldoPendiente = total - totalPagado;
 
     const handleConfirm = () => { 
         if (totalPagado > total + 0.01) { 
             setError('El pago no puede superar el total.'); return; 
-        } 
+        }
+        // Validación de tarjeta
+        if ((parseFloat(pagoTarjeta) || 0) > 0 && !nroCupon.trim()) {
+            setError('Debe ingresar el Nro. de Cupón para pagos con tarjeta.');
+            return;
+        }
+        
         onConfirm({ 
             pagoEfectivo: parseFloat(pagoEfectivo) || 0, 
-            pagoTransferencia: parseFloat(pagoTransferencia) || 0 
+            pagoTransferencia: parseFloat(pagoTransferencia) || 0,
+            pagoTarjeta: parseFloat(pagoTarjeta) || 0,
+            nroCupon: nroCupon.trim()
         }); 
     };
+
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
             <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-2xl border border-slate-100 transform transition-all scale-100">
@@ -101,6 +252,7 @@ const CollectSaleModal = ({ total, onConfirm, onClose }) => {
                     <p className="text-3xl font-extrabold text-slate-900">{formatCurrency(total)}</p>
                 </div>
                 <div className="space-y-4">
+                    {/* EFECTIVO */}
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Efectivo</label>
                         <div className="relative">
@@ -108,6 +260,7 @@ const CollectSaleModal = ({ total, onConfirm, onClose }) => {
                             <input type="number" step="0.01" value={pagoEfectivo} onChange={(e) => { setPagoEfectivo(e.target.value); setError(''); }} className="w-full pl-7 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-green-500 outline-none" placeholder="0.00" />
                         </div>
                     </div>
+                    {/* TRANSFERENCIA */}
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Transferencia</label>
                         <div className="relative">
@@ -115,6 +268,24 @@ const CollectSaleModal = ({ total, onConfirm, onClose }) => {
                             <input type="number" step="0.01" value={pagoTransferencia} onChange={(e) => { setPagoTransferencia(e.target.value); setError(''); }} className="w-full pl-7 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00" />
                         </div>
                     </div>
+                    {/* TARJETA */}
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center gap-2">
+                           <CardIcon className="w-4 h-4"/> Tarjeta (Crédito/Débito)
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
+                            <input type="number" step="0.01" value={pagoTarjeta} onChange={(e) => { setPagoTarjeta(e.target.value); setError(''); }} className="w-full pl-7 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="0.00" />
+                        </div>
+                        {/* CAMPO CONDICIONAL CUPÓN */}
+                        {(parseFloat(pagoTarjeta) || 0) > 0 && (
+                            <div className="mt-2 animate-fade-in">
+                                <label className="block text-[10px] font-bold text-purple-600 uppercase mb-1">Nro. de Cupón / Operación *</label>
+                                <input type="text" value={nroCupon} onChange={(e) => setNroCupon(e.target.value)} className="w-full px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg text-sm font-medium text-purple-800 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Ej: 123456" />
+                            </div>
+                        )}
+                    </div>
+
                     <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                         <span className="text-sm font-bold text-slate-600">Saldo Pendiente (Deuda):</span>
                         <span className={`text-lg font-bold ${saldoPendiente > 0.01 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(saldoPendiente)}</span>
@@ -139,15 +310,22 @@ function Facturacion() {
     const [categorias, setCategorias] = useState([]); 
     const [clientes, setClientes] = useState([]);
     const [zonas, setZonas] = useState([]);
-    const [priceLists, setPriceLists] = useState([]); // Listas de precios
+    const [priceLists, setPriceLists] = useState([]); 
     
-    // ESTADO PRINCIPAL DE NUEVA FACTURA
-    const [newInvoice, setNewInvoice] = useState({ vendedorId: '', clienteId: '', items: [], observaciones: '', listaPreciosId: '' });
+    // --- ESTADO PRINCIPAL DE NUEVA FACTURA ---
+    const [newInvoice, setNewInvoice] = useState({ 
+        // vendedorId eliminado, se usará auth.currentUser
+        clienteId: '', 
+        items: [], 
+        observaciones: '', 
+        listaPreciosId: '',
+        facturaAfip: false 
+    });
     
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('Todos');
-    const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+    const [isSaving, setIsSaving] = useState(false); 
     
     // Modal selección producto
     const [productForQuantity, setProductForQuantity] = useState(null);
@@ -168,12 +346,8 @@ function Facturacion() {
                 fecha: doc.data().fecha.toDate() 
             }));
             
-            // --- FILTRO VISUAL: SOLO VENTAS ---
-            // Excluimos cobros, cobranzas, rendiciones.
-            // Solo mostramos lo que sea una VENTA explícita o devoluciones.
-            // Si no tiene tipo, asumimos venta (legacy).
             const cleanDocs = docs.filter(d => {
-                if (!d.tipo) return true; // Legacy (probablemente venta)
+                if (!d.tipo) return true; 
                 return !['cobro', 'cobranza', 'rendicion', 'rendicion_vendedor', 'rendicion_cobranza'].includes(d.tipo);
             });
 
@@ -244,7 +418,6 @@ function Facturacion() {
         const numQuantity = parseInt(quantity, 10);
         if (isNaN(numQuantity) || numQuantity <= 0) return;
         
-        // 1. Determinar precio según lista
         let finalPrice = product.precio;
         if (newInvoice.listaPreciosId && product.preciosExtra) {
              if (product.preciosExtra[newInvoice.listaPreciosId]) {
@@ -255,7 +428,6 @@ function Facturacion() {
              }
         }
 
-        // 2. Calcular comisión EN MONTO ($)
         const category = categorias.find(cat => cat.id === product.categoriaId);
         const porcentajeComision = product.comisionEspecifica ?? (category?.comisionGeneral ?? 0); 
         const montoComisionUnitario = (finalPrice * (porcentajeComision / 100));
@@ -311,11 +483,26 @@ function Facturacion() {
     };
 
     const calculateTotal = () => newInvoice.items.reduce((total, item) => total + ((item.precio || 0) * (item.quantity || 0)), 0);
-    const resetForm = () => { setNewInvoice({ vendedorId: '', clienteId: '', items: [], observaciones: '', listaPreciosId: '' }); setError(''); setProductSearch(''); setClientSearchTerm(''); };
+    const resetForm = () => { setNewInvoice({ clienteId: '', items: [], observaciones: '', listaPreciosId: '', facturaAfip: false }); setError(''); setProductSearch(''); setClientSearchTerm(''); };
     const handleOpenModalForCreate = () => { resetForm(); setIsModalOpen(true); };
     
     const handleClientChange = (e) => {
-        const client = clientes.find(c => c.id === e.target.value);
+        const clientId = e.target.value;
+        
+        // ✅ CORRECCIÓN CRÍTICA: Si elige vacío (Consumidor Final), limpiamos todo
+        if (!clientId) {
+            setNewInvoice(prev => ({ 
+                ...prev, 
+                clienteId: '', 
+                clienteNombre: 'Consumidor Final', 
+                listaPreciosId: '',
+                facturaAfip: false, // Resetear AFIP por seguridad
+                items: [] 
+            }));
+            return;
+        }
+
+        const client = clientes.find(c => c.id === clientId);
         if (!client) return;
 
         const listaAsignada = client.listaPreciosAsignada || '';
@@ -325,22 +512,41 @@ function Facturacion() {
             clienteId: client.id, 
             clienteNombre: client.nombre || client.nombreCompleto || 'Cliente Sin Nombre', 
             listaPreciosId: listaAsignada,
+            // Si el cliente tiene flag de factura, lo activamos por defecto
+            facturaAfip: client.requiereFacturaAfip || false, 
             items: [] 
         }));
         if(listaAsignada) toast.info(`Lista de precios "${listaAsignada}" aplicada.`);
     };
 
+    // --- GUARDADO Y FACTURACIÓN ---
     const handleSaveInvoice = async (paymentData = null) => {
-        if (!newInvoice.vendedorId) { setError('Seleccione un vendedor.'); return; }
         if (newInvoice.items.length === 0) { setError('Carrito vacío.'); return; }
+        
+        // ✅ CORRECCIÓN CRÍTICA: Validación AFIP Estricta
+        const clienteSeleccionado = clientes.find(c => c.id === newInvoice.clienteId);
+        const cuitCliente = clienteSeleccionado?.numeroDocumento || clienteSeleccionado?.cuit || '';
+
+        if (newInvoice.facturaAfip) {
+            if (newInvoice.clienteId && (!cuitCliente || cuitCliente.length < 7)) {
+                toast.error("ERROR CRÍTICO: El cliente seleccionado NO tiene CUIT/DNI cargado. No se puede emitir factura AFIP.");
+                return;
+            }
+        }
+
+        setIsSaving(true);
     
-        const vendedor = vendedores.find(v => v.id === newInvoice.vendedorId);
+        // ✅ ASIGNACIÓN AUTOMÁTICA DE VENDEDOR (Usuario Logueado)
+        const currentUser = auth.currentUser;
+        const currentVendor = vendedores.find(v => v.email === currentUser?.email) || { id: 'admin', nombreCompleto: 'Administrador' };
         
         const totalVenta = calculateTotal();
+        
         let finalSaleData = {
             ...newInvoice,
-            tipo: 'venta', // ✅ IMPORTANTE: MARCAMOS COMO VENTA EXPLÍCITA
-            vendedorNombre: vendedor?.nombreCompleto || 'N/A',
+            tipo: 'venta', 
+            vendedorId: currentVendor.id, // Asignación automática
+            vendedorNombre: currentVendor.nombreCompleto, // Asignación automática
             fecha: Timestamp.now(),
             totalVenta,
             estado: 'Adeuda', 
@@ -348,6 +554,8 @@ function Facturacion() {
             totalComision: calculateTotalComisionFromItems(newInvoice.items), 
             pagoEfectivo: 0,
             pagoTransferencia: 0,
+            pagoTarjeta: 0,
+            nroCupon: '',
             saldoPendiente: totalVenta,
             descuentoAplicado: 0, 
             totalVentaBruto: totalVenta,
@@ -358,16 +566,24 @@ function Facturacion() {
         
         finalSaleData.totalNetProfit = finalSaleData.totalVenta - finalSaleData.totalCosto - finalSaleData.totalComision;
     
-        const clienteSeleccionado = clientes.find(c => c.id === newInvoice.clienteId);
         finalSaleData.clienteNombre = clienteSeleccionado?.nombre || clienteSeleccionado?.nombreCompleto || 'Consumidor Final';
         finalSaleData.clienteId = clienteSeleccionado?.id || '';
         finalSaleData.clienteZonaId = clienteSeleccionado?.zonaId || '';
+        
+        // Datos Fiscales del Cliente para la Cloud Function
+        finalSaleData.clienteCuit = cuitCliente;
+        finalSaleData.clienteCondicionIVA = clienteSeleccionado?.condicionIva || 'CF';
+        finalSaleData.clienteTipoDoc = (finalSaleData.clienteCuit.length === 11) ? 'CUIT' : 'DNI';
     
         if (paymentData) {
-            const { pagoEfectivo, pagoTransferencia } = paymentData;
-            const totalPagado = pagoEfectivo + pagoTransferencia;
+            const { pagoEfectivo, pagoTransferencia, pagoTarjeta, nroCupon } = paymentData;
+            const totalPagado = pagoEfectivo + pagoTransferencia + pagoTarjeta;
+            
             finalSaleData.pagoEfectivo = pagoEfectivo;
             finalSaleData.pagoTransferencia = pagoTransferencia;
+            finalSaleData.pagoTarjeta = pagoTarjeta;
+            finalSaleData.nroCupon = nroCupon || ''; 
+            
             finalSaleData.saldoPendiente = totalVenta - totalPagado;
             finalSaleData.estado = finalSaleData.saldoPendiente > 0.01 ? 'Adeuda' : 'Pagada';
             finalSaleData.paymentMethod = finalSaleData.saldoPendiente <= 0.01 ? 'contado' : 'cuenta_corriente'; 
@@ -375,6 +591,7 @@ function Facturacion() {
     
         const newSaleRef = doc(collection(db, "ventas"));
         try {
+            // 1. Guardar en Firestore primero
             await runTransaction(db, async (transaction) => {
                 const productReads = finalSaleData.items.map(item => {
                     const productRef = doc(db, 'productos', item.productId);
@@ -395,19 +612,51 @@ function Facturacion() {
                 });
                 transaction.set(newSaleRef, finalSaleData);
             });
+
+            // 2. Si requiere factura AFIP, llamar a la Cloud Function
+            let saleForPDF = { ...finalSaleData, id: newSaleRef.id };
             
+            if (finalSaleData.facturaAfip) {
+                toast.info("Conectando con AFIP...");
+                try {
+                    const result = await emitirFacturaCloud({ ventas: [{ ...finalSaleData, id: newSaleRef.id }] });
+                    const resultadoAfip = result.data[0];
+                    
+                    if (resultadoAfip.status === 'OK') {
+                        toast.success("¡Factura autorizada por AFIP!");
+                        saleForPDF = { 
+                            ...saleForPDF, 
+                            afipCAE: resultadoAfip.detalle.cae,
+                            afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
+                            afipNumeroComprobante: resultadoAfip.detalle.numero,
+                            afipLetra: resultadoAfip.detalle.tipoLetra
+                        };
+                    } else {
+                        toast.error(`Error AFIP: ${resultadoAfip.detalle}`);
+                        // No bloqueamos, se guardó pero sin CAE
+                    }
+                } catch (afipError) {
+                    console.error(afipError);
+                    toast.error("Error de comunicación con AFIP. La venta se guardó como pendiente.");
+                }
+            } else {
+                toast.success("Venta guardada correctamente.");
+            }
+            
+            // 3. Imprimir PDF
             const clientDetails = clientes.find(c => c.id === finalSaleData.clienteId) || {};
             const zonaNombre = getZonaNombre(clientDetails.zonaId);
-            printInvoicePDF({ ...finalSaleData, id: newSaleRef.id, fecha: new Date() }, clientDetails, zonaNombre);
+            printInvoicePDF(saleForPDF, clientDetails, zonaNombre);
     
             setIsModalOpen(false);
             setIsCollectModalOpen(false);
             resetForm();
-            toast.success("Factura guardada correctamente.");
         } catch (err) {
             console.error(err);
             setError(err.message);
             toast.error(err.message);
+        } finally {
+            setIsSaving(false);
         }
     };
     
@@ -430,7 +679,6 @@ function Facturacion() {
         }
     };
 
-    // --- NUEVA FUNCIÓN: RESET TOTAL ---
     const handleDeleteAllInvoices = async () => {
         if (!window.confirm("⚠️ PELIGRO: ¿Estás seguro de BORRAR TODAS las facturas? Esto restaurará el stock de cada venta y reiniciará las métricas. Esta acción no se puede deshacer.")) return;
         
@@ -481,30 +729,11 @@ function Facturacion() {
         <div className="min-h-screen bg-slate-50 p-6 font-sans animate-fade-in">
             <style>{`.animate-fade-in { animation: fadeIn 0.5s ease-out; } @keyframes fadeIn { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }`}</style>
             
-            {/* KPI CARDS CORREGIDOS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {[
-                    { 
-                        title: 'Ventas Hoy', 
-                        val: metrics.salesToday, 
-                        icon: DollarSignIcon, 
-                        color: 'green', 
-                        sub: 'Cobrado efectivo/transf' 
-                    },
-                    { 
-                        title: 'Ventas Mes', 
-                        val: metrics.salesMonth, 
-                        icon: BarChartIcon, 
-                        color: 'blue', 
-                        sub: 'Facturación Bruta' 
-                    },
-                    { 
-                        title: 'Ganancia Real', 
-                        val: metrics.netProfitMonth, 
-                        icon: DollarSignIcon, 
-                        color: 'indigo', 
-                        sub: 'Ventas - (Costos + Comisiones)' 
-                    }
+                    { title: 'Ventas Hoy', val: metrics.salesToday, icon: DollarSignIcon, color: 'green', sub: 'Cobrado efectivo/transf' },
+                    { title: 'Ventas Mes', val: metrics.salesMonth, icon: BarChartIcon, color: 'blue', sub: 'Facturación Bruta' },
+                    { title: 'Ganancia Real', val: metrics.netProfitMonth, icon: DollarSignIcon, color: 'indigo', sub: 'Ventas - (Costos + Comisiones)' }
                 ].map((m, i) => (
                     <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
                         <div>
@@ -519,24 +748,17 @@ function Facturacion() {
                 ))}
             </div>
 
-            {/* MAIN CONTAINER */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                {/* TOOLBAR */}
                 <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                     <h2 className="text-xl font-bold text-slate-800">Historial de Operaciones</h2>
                     <div className="flex flex-wrap items-center gap-3">
-                        
-                        {/* BOTÓN RESET PARA TESTING */}
                         <button onClick={handleDeleteAllInvoices} className="px-3 py-2 bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm">
                             <TrashIcon className="w-4 h-4"/> RESET TOTAL
                         </button>
-
                         <div className="relative group">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><SearchIcon /></span>
                             <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none w-40 md:w-60 transition-all"/>
                         </div>
-                        
-                        {/* FILTROS CORREGIDOS */}
                         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                             <option>Todos</option>
                             <option>Pagada</option>
@@ -545,7 +767,6 @@ function Facturacion() {
                             <option>Repartiendo</option>
                             <option>Anulada</option>
                         </select>
-                        
                         <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"/>
                         <Button onClick={handleOpenModalForCreate} icon={<PlusIcon />}>
                             Nueva Venta
@@ -553,7 +774,6 @@ function Facturacion() {
                     </div>
                 </div>
 
-                {/* TABLA MODERNIZADA */}
                 <div className="overflow-x-auto">
                     <table className="min-w-full whitespace-nowrap border-separate border-spacing-y-0">
                         <thead className="bg-slate-50">
@@ -567,15 +787,7 @@ function Facturacion() {
                             {paginatedVentas.map((venta) => {
                                 const clienteNombre = venta.clienteNombre || (clientes.find(c => c.id === venta.clienteId)?.nombre) || 'Unknown';
                                 const vendedorNombre = venta.vendedorNombre || (vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto) || 'Unknown';
-                                
-                                const statusColor = {
-                                    'Pagada': 'bg-green-100 text-green-700 border-green-200',
-                                    'Adeuda': 'bg-amber-100 text-amber-700 border-amber-200',
-                                    'Pendiente de Entrega': 'bg-indigo-100 text-indigo-700 border-indigo-200',
-                                    'Repartiendo': 'bg-blue-100 text-blue-700 border-blue-200',
-                                    'Anulada': 'bg-slate-100 text-slate-500 border-slate-200'
-                                }[venta.estado] || 'bg-slate-100 text-slate-600';
-
+                                const statusColor = { 'Pagada': 'bg-green-100 text-green-700 border-green-200', 'Adeuda': 'bg-amber-100 text-amber-700 border-amber-200', 'Pendiente de Entrega': 'bg-indigo-100 text-indigo-700 border-indigo-200', 'Repartiendo': 'bg-blue-100 text-blue-700 border-blue-200', 'Anulada': 'bg-slate-100 text-slate-500 border-slate-200' }[venta.estado] || 'bg-slate-100 text-slate-600';
                                 return (
                                 <tr key={venta.id} className="group hover:bg-slate-50/80 transition-colors">
                                     <td className="px-6 py-4 text-xs font-mono font-bold text-slate-500">#{venta.numeroFactura || venta.id.substring(0, 6)}</td>
@@ -600,7 +812,6 @@ function Facturacion() {
                     </table>
                 </div>
                 
-                {/* PAGINACIÓN */}
                 {totalPages > 1 && (
                     <div className="p-4 border-t border-slate-100 flex justify-center gap-2">
                         <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50">Anterior</button>
@@ -610,12 +821,10 @@ function Facturacion() {
                 )}
             </div>
 
-            {/* --- MODAL NUEVA VENTA (DISEÑO SPLIT) --- */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-slate-200">
                         
-                        {/* IZQUIERDA: DATOS Y CARRITO (60%) */}
                         <div className="w-full md:w-[60%] flex flex-col h-full border-r border-slate-100">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                 <h3 className="text-xl font-extrabold text-slate-800">Nueva Operación</h3>
@@ -624,13 +833,14 @@ function Facturacion() {
                             
                             <div className="p-6 flex-grow overflow-y-auto custom-scrollbar">
                                 <div className="grid grid-cols-2 gap-4 mb-6">
+                                    {/* VENDEDOR AUTOMÁTICO (Usuario Logueado) */}
                                     <div className="col-span-1">
-                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Vendedor</label>
-                                        <select value={newInvoice.vendedorId} onChange={(e) => setNewInvoice({...newInvoice, vendedorId: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
-                                            <option value="">Seleccionar...</option>
-                                            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}
-                                        </select>
+                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Vendedor</label>
+                                         <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed">
+                                             {auth.currentUser?.email || 'Usuario Actual'}
+                                         </div>
                                     </div>
+                                    
                                     <div className="col-span-1">
                                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Cliente</label>
                                          <input type="text" placeholder="Buscar..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="w-full mb-2 px-3 py-1.5 bg-slate-50 border-none rounded-lg text-xs"/>
@@ -639,13 +849,26 @@ function Facturacion() {
                                             {filteredClients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                         </select>
                                         {newInvoice.listaPreciosId && <span className="text-[10px] text-amber-600 font-bold mt-1 block">⭐ Lista Aplicada: {newInvoice.listaPreciosId}</span>}
+                                        
+                                        {/* --- CHECKBOX AFIP MEJORADO --- */}
+                                        <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                                            <input 
+                                                type="checkbox" 
+                                                id="chkAfip" 
+                                                checked={newInvoice.facturaAfip} 
+                                                onChange={(e) => setNewInvoice({...newInvoice, facturaAfip: e.target.checked})}
+                                                className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <label htmlFor="chkAfip" className="text-xs font-bold text-indigo-700 cursor-pointer select-none">
+                                                Emitir Factura Electrónica (AFIP)
+                                            </label>
+                                        </div>
                                     </div>
                                     <div className="col-span-2">
                                         <textarea placeholder="Observaciones..." value={newInvoice.observaciones} onChange={(e) => setNewInvoice({...newInvoice, observaciones: e.target.value})} rows="2" className="w-full px-3 py-2 bg-slate-50 border-none rounded-xl text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
                                     </div>
                                 </div>
 
-                                {/* CARRITO */}
                                 <div className="bg-slate-50 rounded-2xl p-4 min-h-[250px] flex flex-col border border-slate-100">
                                     <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Productos ({newInvoice.items.length})</span>
@@ -676,17 +899,16 @@ function Facturacion() {
                                 </div>
                             </div>
                             
-                            {/* FOOTER IZQUIERDO: TOTALES */}
                             <div className="p-6 bg-white border-t border-slate-100 z-10">
                                 <div className="flex justify-between items-end mb-4">
                                     <span className="text-sm font-bold text-slate-500">Total a Pagar</span>
                                     <span className="text-4xl font-extrabold text-slate-900">{formatCurrency(calculateTotal())}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <button onClick={() => handleSaveInvoice()} className="py-3 px-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">
-                                        Guardar (Cta. Cte.)
+                                    <button onClick={() => handleSaveInvoice()} disabled={isSaving} className="py-3 px-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                                        {isSaving ? 'Procesando...' : 'Guardar (Cta. Cte.)'}
                                     </button>
-                                    <button onClick={() => setIsCollectModalOpen(true)} className="py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
+                                    <button onClick={() => setIsCollectModalOpen(true)} disabled={isSaving} className="py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50">
                                         Cobrar Ahora
                                     </button>
                                 </div>
@@ -694,7 +916,6 @@ function Facturacion() {
                             </div>
                         </div>
 
-                        {/* DERECHA: SELECTOR PRODUCTOS (40%) */}
                         <div className="w-full md:w-[40%] bg-slate-50 flex flex-col h-full">
                             <div className="p-4 border-b border-slate-200 bg-white shadow-sm z-10">
                                 <div className="relative">
@@ -727,7 +948,6 @@ function Facturacion() {
                 </div>
             )}
 
-            {/* MODAL CANTIDAD RAPIDA */}
             {productForQuantity && ( 
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"> 
                     <div className="w-full max-w-sm p-6 bg-white rounded-2xl shadow-2xl border border-slate-100 transform scale-100 transition-all">

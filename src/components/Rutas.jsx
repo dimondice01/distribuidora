@@ -164,9 +164,14 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
             <div style="position: absolute; left: 50%; top: 60px; bottom: 0; border-left: 1px solid #000;"></div>
 
             <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
-                <h1 style="margin: 0 0 5px 0; font-size: 16px; font-weight: 900; text-transform: uppercase;">Distribuidora La Llave</h1>
+                
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <div style="width: 30px; height: 30px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 18px; font-family: Arial, sans-serif;">N</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px; font-family: Arial, sans-serif;">NOAR <span style="color: #d97706; font-weight: 300; letter-spacing: 2px; font-size: 14px;">ERP</span></div>
+                </div>
+
                 <p style="margin: 0; font-size: 9px; line-height: 1.3;">
-                    <strong>Razón Social:</strong> Tu Nombre Completo<br>
+                    <strong>Distribuidora La Llave</strong><br>
                     <strong>Domicilio:</strong> Dirección Real, La Rioja<br>
                     <strong>Condición IVA:</strong> Monotributo
                 </p>

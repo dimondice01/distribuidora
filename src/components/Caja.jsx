@@ -17,6 +17,7 @@ import Button from './Button';
 // --- Iconografía (Lucide Style) ---
 const CashIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>;
 const CreditCardIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>;
+const BankIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21v-7m8 0v7m6-7v7M2 10l10-5 10 5v4h-2v-4H4v4H2v-4z"/></svg>;
 const ArrowUpIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>;
 const ArrowDownIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>;
 const PrinterIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
@@ -26,41 +27,46 @@ const WalletIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg"
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
-// --- Generador de Reporte HTML ---
-const generateCashFlowReportHTML = (date, shiftName, ingresosEfectivo, ingresosTransferencia, gastosEfectivo, gastosTransferencia, saldoAnterior, resumen) => {
+// --- Generador de Reporte HTML (Detallado) ---
+const generateCashFlowReportHTML = (date, shiftName, ingresosEfectivo, ingresosTransferencia, ingresosTarjeta, gastosEfectivo, gastosTransferencia, saldoAnterior, resumen) => {
     const ingresosEfectivoRows = ingresosEfectivo.map(v => `<tr><td>${v.clientName || v.clienteNombre}</td><td>${v.tipo === 'rendicion_cobranza' ? 'Rendición Cobranzas' : (v.tipo === 'rendicion' ? 'Rendición Ruta' : 'Venta Mostrador')}</td><td style="text-align:right;">${formatCurrency(v.pagoEfectivo)}</td></tr>`).join('');
     const ingresosTransferenciaRows = ingresosTransferencia.map(v => `<tr><td>${v.clientName || v.clienteNombre}</td><td>${v.tipo === 'rendicion_cobranza' ? 'Rendición Cobranzas' : (v.tipo === 'rendicion' ? 'Rendición Ruta' : 'Venta Mostrador')}</td><td style="text-align:right;">${formatCurrency(v.pagoTransferencia)}</td></tr>`).join('');
+    
+    // Tabla de Tarjetas con Nro Cupón
+    const ingresosTarjetaRows = ingresosTarjeta.map(v => `<tr><td>${v.clientName || v.clienteNombre}</td><td>${v.nroCupon || 'S/D'}</td><td style="text-align:right;">${formatCurrency(v.pagoTarjeta)}</td></tr>`).join('');
+    
     const gastosEfectivoRows = gastosEfectivo.map(g => `<tr><td>${g.detalle}</td><td style="text-align:right;">${formatCurrency(g.monto)}</td></tr>`).join('');
-    const gastosTransferenciaRows = gastosTransferencia.map(g => `<tr><td>${g.detalle}</td><td style="text-align:right;">${formatCurrency(g.monto)}</td></tr>`).join('');
     
     return `
-    <html><head><title>Reporte de Caja - ${date}</title><style>body{font-family: sans-serif; padding: 20px;} table{width: 100%; border-collapse: collapse; margin-top: 10px;} th, td{padding: 8px; border-bottom: 1px solid #ddd; text-align: left;} .text-right { text-align: right; } .summary-box { background: #f8f9fa; padding: 15px; margin-top: 20px; border-radius: 8px; }</style></head>
+    <html><head><title>Reporte de Caja - ${date}</title><style>body{font-family: sans-serif; padding: 20px;} table{width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px;} th, td{padding: 8px; border-bottom: 1px solid #ddd; text-align: left;} .text-right { text-align: right; } .summary-box { background: #f8f9fa; padding: 15px; margin-top: 20px; border-radius: 8px; border: 1px solid #ddd; } .section-title { margin-top: 20px; border-bottom: 2px solid #eee; padding-bottom: 5px; color: #555; }</style></head>
     <body>
         <h1>Reporte de Caja: ${date}</h1>
         <p>Turno: <strong>${shiftName}</strong></p>
         
-        <h3>Ingresos Efectivo</h3>
+        <h3 class="section-title">Ingresos Efectivo</h3>
         <table><thead><tr><th>Origen</th><th>Tipo</th><th class="text-right">Monto</th></tr></thead><tbody>${ingresosEfectivoRows || '<tr><td colspan="3">Sin movimientos</td></tr>'}</tbody></table>
         
-        <h3>Ingresos Transferencia</h3>
+        <h3 class="section-title">Ingresos Transferencia</h3>
         <table><thead><tr><th>Origen</th><th>Tipo</th><th class="text-right">Monto</th></tr></thead><tbody>${ingresosTransferenciaRows || '<tr><td colspan="3">Sin movimientos</td></tr>'}</tbody></table>
 
-        <h3>Egresos</h3>
+        <h3 class="section-title">Ingresos Tarjeta (Crédito/Débito)</h3>
+        <table><thead><tr><th>Origen</th><th>Nro. Cupón</th><th class="text-right">Monto</th></tr></thead><tbody>${ingresosTarjetaRows || '<tr><td colspan="3">Sin movimientos</td></tr>'}</tbody></table>
+
+        <h3 class="section-title">Egresos (Efectivo)</h3>
         <table><thead><tr><th>Detalle</th><th class="text-right">Monto</th></tr></thead><tbody>${gastosEfectivoRows || '<tr><td colspan="2">Sin movimientos</td></tr>'}</tbody></table>
 
         <div class="summary-box">
-            <p><strong>Saldo Inicial:</strong> ${formatCurrency(saldoAnterior)}</p>
+            <p><strong>Saldo Inicial (Efectivo):</strong> ${formatCurrency(saldoAnterior)}</p>
             <p><strong>(+) Ingresos Efvo:</strong> ${formatCurrency(resumen.totalEfectivo)}</p>
             <p><strong>(-) Gastos Efvo:</strong> -${formatCurrency(resumen.totalGastosEfectivo)}</p>
             <hr/>
-            <h2>Saldo Final Caja: ${formatCurrency(resumen.balanceNetoEfectivo)}</h2>
+            <h2>Saldo Final Caja (Físico): ${formatCurrency(resumen.balanceNetoEfectivo)}</h2>
+            <br/>
+            <p style="color: #666; font-size: 12px;">Otros Ingresos (No afectan caja física):</p>
+            <p><strong>Transferencias:</strong> ${formatCurrency(resumen.totalTransferencia)}</p>
+            <p><strong>Tarjetas:</strong> ${formatCurrency(resumen.totalTarjeta)}</p>
         </div>
     </body></html>`;
-};
-
-const generateHistoricalReportHTML = (cierre) => {
-    const date = new Date(cierre.fechaContable + 'T12:00:00Z').toLocaleDateString('es-AR');
-    return `<html><body><h1>Reporte Histórico: ${date}</h1><p>Saldo Final: ${formatCurrency(cierre.balanceFinalEfectivo)}</p></body></html>`;
 };
 
 const printHTML = (htmlContent) => {
@@ -98,7 +104,6 @@ function Caja() {
         const startTS = Timestamp.fromDate(startOfDay); 
         const endTS = Timestamp.fromDate(endOfDay);
         
-        // Traemos todos los documentos de la colección ventas creados hoy
         const qFecha = query(collection(db, 'ventas'), where('fecha', '>=', startTS), where('fecha', '<=', endTS));
         const qGastos = query(collection(db, 'gastos'), where('fechaGasto', '>=', startTS), where('fechaGasto', '<=', endTS));
         
@@ -110,31 +115,23 @@ function Caja() {
         return () => { unsub1(); unsub2(); };
     }, [selectedDate]);
 
-    // --- LÓGICA DE FILTRADO: LO QUE ENTRA A LA CAJA ---
     const { resumen, currentShiftVentas, currentShiftGastos } = useMemo(() => {
         const dateStr = selectedDate.toISOString().split('T')[0];
         const closedIds = new Set(cierresDeCaja.filter(c => c.fechaContable?.startsWith(dateStr)).map(c => c.id));
 
         const relevantVentas = ventasPorFecha.filter(v => {
-            // Si ya está cerrado en un turno anterior, lo ignoramos
             if (v.cierreId && closedIds.has(v.cierreId)) return false;
 
-            // 🚨 BLOQUEO ESTRICTO DE COBROS:
-            // Los cobros de deuda ('cobro') y las ventas de ruta ('venta' con rutaId)
-            // están en la calle, NO en la caja central.
+            // Filtro estricto: Solo ventas con algún pago > 0
+            const totalPagadoReal = (parseFloat(v.pagoEfectivo) || 0) + (parseFloat(v.pagoTransferencia) || 0) + (parseFloat(v.pagoTarjeta) || 0);
+            if (totalPagadoReal <= 0.01) return false; 
+
             if (v.tipo === 'cobro') return true;
             if (v.tipo === 'cobranza') return false; 
             if (v.tipo === 'venta' && v.rutaId) return true; 
 
-            // ✅ LO QUE SÍ ENTRA A CAJA:
-            
-            // 1. Rendiciones de Cobranza (Vendedores)
             if (v.tipo === 'rendicion_cobranza') return true;
-            
-            // 2. Rendiciones de Ruta (Repartidores)
             if (v.tipo === 'rendicion') return true;
-
-            // 3. Ventas de Mostrador (Sin ruta asignada y creadas hoy)
             if (v.tipo === 'venta' && !v.rutaId) return true;
 
             return false; 
@@ -144,13 +141,14 @@ function Caja() {
 
         const totalEfectivo = relevantVentas.reduce((sum, v) => sum + (parseFloat(v.pagoEfectivo) || 0), 0);
         const totalTransferencia = relevantVentas.reduce((sum, v) => sum + (parseFloat(v.pagoTransferencia) || 0), 0);
+        const totalTarjeta = relevantVentas.reduce((sum, v) => sum + (parseFloat(v.pagoTarjeta) || 0), 0);
         
         const totalGastosEfectivo = relevantGastos.filter(g => g.metodoPago === 'Efectivo' || !g.metodoPago).reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
         const totalGastosTransferencia = relevantGastos.filter(g => g.metodoPago === 'Transferencia').reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
 
         return { 
             resumen: { 
-                totalEfectivo, totalTransferencia, 
+                totalEfectivo, totalTransferencia, totalTarjeta,
                 totalGastosEfectivo, totalGastosTransferencia, 
                 balanceNetoEfectivo: saldoAnterior + totalEfectivo - totalGastosEfectivo 
             }, 
@@ -158,6 +156,58 @@ function Caja() {
             currentShiftGastos: relevantGastos 
         };
     }, [ventasPorFecha, gastosDia, saldoAnterior, cierresDeCaja, selectedDate]);
+
+    // --- FUNCIÓN INTELIGENTE: IMPRESIÓN HISTÓRICA DETALLADA ---
+    const handlePrintHistory = async (cierre) => {
+        const loadingToast = toast.loading("Generando reporte detallado...");
+        try {
+            // 1. Recuperar todas las ventas asociadas a este cierre
+            const qVentas = query(collection(db, 'ventas'), where('cierreId', '==', cierre.id));
+            const snapshotVentas = await getDocs(qVentas);
+            const ventasCierre = snapshotVentas.docs.map(d => d.data());
+
+            // 2. Recuperar todos los gastos asociados
+            const qGastos = query(collection(db, 'gastos'), where('cierreId', '==', cierre.id));
+            const snapshotGastos = await getDocs(qGastos);
+            const gastosCierre = snapshotGastos.docs.map(d => d.data());
+
+            // 3. Clasificar para el reporte detallado
+            const iE = ventasCierre.filter(v => v.pagoEfectivo > 0);
+            const iT = ventasCierre.filter(v => v.pagoTransferencia > 0);
+            const iC = ventasCierre.filter(v => v.pagoTarjeta > 0);
+
+            const gE = gastosCierre.filter(g => g.metodoPago !== 'Transferencia');
+            const gT = gastosCierre.filter(g => g.metodoPago === 'Transferencia');
+
+            // 4. Reconstruir objeto resumen para la función de HTML
+            const resumenReconstruido = {
+                totalEfectivo: cierre.ingresosEfectivo || 0,
+                totalTransferencia: cierre.ingresosTransferencia || 0,
+                totalTarjeta: cierre.ingresosTarjeta || 0,
+                totalGastosEfectivo: cierre.gastosEfectivo || 0,
+                totalGastosTransferencia: cierre.gastosTransferencia || 0,
+                balanceNetoEfectivo: cierre.balanceFinalEfectivo || 0
+            };
+
+            // 5. Generar HTML completo
+            const html = generateCashFlowReportHTML(
+                cierre.fechaContable, 
+                cierre.turno, 
+                iE, iT, iC, 
+                gE, gT, 
+                cierre.saldoAnteriorEfectivo, 
+                resumenReconstruido
+            );
+
+            toast.dismiss(loadingToast);
+            printHTML(html);
+
+        } catch (error) {
+            console.error(error);
+            toast.dismiss(loadingToast);
+            toast.error("Error al recuperar detalles del cierre.");
+        }
+    };
 
     const handleCloseAndGenerateReport = async () => {
         if (!shiftName.trim()) { toast.error('Falta nombre de Turno'); return; }
@@ -167,12 +217,15 @@ function Caja() {
             fechaContable: selectedDate.toISOString().split('T')[0],
             turno: shiftName,
             saldoAnteriorEfectivo: saldoAnterior,
+            
             ingresosEfectivo: resumen.totalEfectivo,
             gastosEfectivo: resumen.totalGastosEfectivo,
-            balanceFinalEfectivo: resumen.balanceNetoEfectivo,
+            balanceFinalEfectivo: resumen.balanceNetoEfectivo, 
+            
             ingresosTransferencia: resumen.totalTransferencia,
             gastosTransferencia: resumen.totalGastosTransferencia,
-            totalNetoTransferencia: resumen.totalTransferencia - resumen.totalGastosTransferencia,
+            ingresosTarjeta: resumen.totalTarjeta, // Guardamos el total de tarjetas
+            
             conteoVentas: currentShiftVentas.length
         };
 
@@ -186,11 +239,15 @@ function Caja() {
             
             await batch.commit();
             
+            // Generamos reporte para el momento del cierre
             const iE = currentShiftVentas.filter(v => v.pagoEfectivo > 0);
             const iT = currentShiftVentas.filter(v => v.pagoTransferencia > 0);
+            const iC = currentShiftVentas.filter(v => v.pagoTarjeta > 0);
+            
             const gE = currentShiftGastos.filter(g => g.metodoPago !== 'Transferencia');
             const gT = currentShiftGastos.filter(g => g.metodoPago === 'Transferencia');
-            printHTML(generateCashFlowReportHTML(closureData.fechaContable, shiftName, iE, iT, gE, gT, saldoAnterior, resumen));
+            
+            printHTML(generateCashFlowReportHTML(closureData.fechaContable, shiftName, iE, iT, iC, gE, gT, saldoAnterior, resumen));
             
             toast.success("Caja cerrada.");
             setSaldoAnterior(resumen.balanceNetoEfectivo);
@@ -250,7 +307,8 @@ function Caja() {
                     />
                 )}
                 {activeTab === 'historial' && (
-                    <HistoryView cierresDeCaja={cierresDeCaja} onDeleteRequest={setCierreToDelete} onPrintRequest={(cierre) => printHTML(generateHistoricalReportHTML(cierre))} />
+                    // Pasamos la nueva función inteligente de impresión
+                    <HistoryView cierresDeCaja={cierresDeCaja} onDeleteRequest={setCierreToDelete} onPrintRequest={handlePrintHistory} />
                 )}
             </div>
             
@@ -274,33 +332,41 @@ function Caja() {
 // --- Componentes Visuales ---
 const CashFlowView = ({ loading, resumen, saldoAnterior, setSaldoAnterior, shiftName, setShiftName, handleCloseAndGenerateReport, currentShiftVentas, currentShiftGastos }) => (
     <div className="space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <MetricCard title="Ingresos Efectivo" value={formatCurrency(resumen.totalEfectivo)} icon={<ArrowUpIcon className="text-emerald-600"/>} bgIcon="bg-emerald-100" />
-            <MetricCard title="Ingresos Bancos" value={formatCurrency(resumen.totalTransferencia)} icon={<CreditCardIcon className="text-blue-600"/>} bgIcon="bg-blue-100" />
+            <MetricCard title="Ingresos Bancos" value={formatCurrency(resumen.totalTransferencia)} icon={<BankIcon className="text-blue-600"/>} bgIcon="bg-blue-100" />
+            <MetricCard title="Ingresos Tarjeta" value={formatCurrency(resumen.totalTarjeta)} icon={<CreditCardIcon className="text-purple-600"/>} bgIcon="bg-purple-100" />
             <MetricCard title="Salida Efectivo" value={formatCurrency(resumen.totalGastosEfectivo)} icon={<ArrowDownIcon className="text-rose-600"/>} bgIcon="bg-rose-100" />
             <MetricCard title="Saldo Final Caja" value={formatCurrency(resumen.balanceNetoEfectivo)} icon={<CashIcon className="text-white"/>} bgIcon="bg-indigo-600" isPrimary />
         </div>
 
         {loading ? <div className="py-20 text-center text-gray-400 animate-pulse">Cargando...</div> :
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            <div className="xl:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <div className="xl:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-gray-100 h-fit">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">🔐 Panel de Cierre</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Saldo Anterior</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Saldo Anterior (Efectivo)</label>
                         <input type="number" value={saldoAnterior} onChange={e => setSaldoAnterior(parseFloat(e.target.value) || 0)} className="w-full p-2 bg-gray-50 border rounded-lg font-bold" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Turno</label>
                         <input type="text" value={shiftName} onChange={e => setShiftName(e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg" />
                     </div>
+                    <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                        <p className="text-xs text-indigo-600 font-medium mb-1">Resumen a Cerrar:</p>
+                        <p className="text-2xl font-black text-indigo-800">{formatCurrency(resumen.balanceNetoEfectivo)}</p>
+                        <p className="text-[10px] text-indigo-400 mt-1">Solo Efectivo Físico</p>
+                    </div>
                     <Button onClick={handleCloseAndGenerateReport} disabled={!shiftName.trim()} className="w-full py-3" icon={<PrinterIcon className="w-5 h-5"/>}>CERRAR CAJA</Button>
                 </div>
             </div>
 
-            <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <MovementList title="Ingresos" count={currentShiftVentas.length} items={currentShiftVentas} type="income" />
-                <MovementList title="Gastos" count={currentShiftGastos.length} items={currentShiftGastos} type="expense" />
+            <div className="xl:col-span-2 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <MovementList title="Ingresos" count={currentShiftVentas.length} items={currentShiftVentas} type="income" />
+                    <MovementList title="Gastos" count={currentShiftGastos.length} items={currentShiftGastos} type="expense" />
+                </div>
             </div>
         </div>
         }
@@ -349,12 +415,18 @@ const MovementList = ({ title, count, items, type }) => (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden flex flex-col h-96">
         <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className={`text-sm font-bold uppercase ${type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{title}</h3><span className="bg-white px-2 py-0.5 rounded text-xs font-bold text-gray-400 border border-gray-200">{count}</span></div>
         <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-            {items.map(item => (
+            {items.map(item => {
+                let metodo = 'Efectivo';
+                if (item.pagoTransferencia > 0) metodo = 'Transf.';
+                if (item.pagoTarjeta > 0) metodo = 'Tarjeta';
+                if (item.metodoPago === 'Transferencia') metodo = 'Transf.';
+
+                return (
                 <div key={item.id} className="p-3 bg-white border border-gray-100 rounded-xl flex justify-between items-center">
                     <div><p className="font-bold text-gray-800 text-sm">{item.clientName || item.clienteNombre || item.detalle}</p><p className="text-xs text-gray-400 font-medium">{item.tipo === 'rendicion' ? 'Rendición de Ruta' : (item.tipo === 'rendicion_cobranza' ? 'Rendición Vendedor' : (item.estado || 'Gasto'))}</p></div>
-                    <div className="text-right"><p className={`font-bold text-sm ${type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency((item.pagoEfectivo || item.monto || 0) + (item.pagoTransferencia || 0))}</p><span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{(item.pagoEfectivo > 0 || item.metodoPago !== 'Transferencia') ? 'Efectivo' : 'Transf.'}</span></div>
+                    <div className="text-right"><p className={`font-bold text-sm ${type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency((item.pagoEfectivo || item.monto || 0) + (item.pagoTransferencia || 0) + (item.pagoTarjeta || 0))}</p><span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{metodo}</span></div>
                 </div>
-            ))}
+            )})}
         </div>
     </div>
 );

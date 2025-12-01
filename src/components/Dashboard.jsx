@@ -23,6 +23,22 @@ const scrollbarStyles = `
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
+// --- LOGO NOAR ERP (Versión Dark Mode para Sidebar) ---
+const NoarLogoDark = () => (
+  <div className="flex items-center gap-3 select-none">
+      {/* Icono: Fondo Ámbar para resaltar en oscuro */}
+      <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center shadow-lg shadow-amber-400/20">
+          <span className="text-slate-900 font-black text-2xl">N</span>
+      </div>
+      {/* Texto: Blanco con acento Ámbar */}
+      <div className="flex flex-col leading-none">
+          <span className="text-2xl font-black tracking-tighter text-white">
+              NOAR <span className="text-amber-400 font-light tracking-widest text-lg">ERP</span>
+          </span>
+      </div>
+  </div>
+);
+
 // --- ICONOS ---
 const Icono = ({ path, d2, className="w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
@@ -42,7 +58,7 @@ const icons = {
   facturacion: <Icono path="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />,
   caja: <Icono path="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
   rutas: <Icono path="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" d2="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />,
-  gastos: <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />,
+  gastos: <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />,
   reporteG: <Icono path="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" d2="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />,
   reporteV: <Icono path="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m1-3l1 3m0 0l-1 3m1-3l1 3M6.75 12h.008v.008H6.75V12zm3.75 0h.008v.008H10.5V12zm3.75 0h.008v.008H14.25V12z" />,
   logout: <Icono path="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />,
@@ -179,9 +195,8 @@ function Dashboard({ user }) {
         <div className="h-20 flex items-center justify-between px-5 bg-slate-950 border-b border-slate-800">
           {isSidebarOpen && (
             <div className="flex flex-col animate-fade-in">
-                <span className="text-xl font-extrabold tracking-tight text-white">Distribuidora</span>
-                {/* Acento Amarillo en el subtítulo */}
-                <span className="text-[10px] text-amber-400 font-bold tracking-[0.25em] uppercase mt-0.5 opacity-90">Admin Panel</span>
+                {/* --- NUEVO LOGO NOAR ERP --- */}
+                <NoarLogoDark />
             </div>
           )}
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-2 rounded-xl text-slate-400 hover:bg-white/5 hover:text-amber-400 transition-all ${isSidebarOpen ? 'ml-auto' : 'mx-auto'}`}>

@@ -3,6 +3,20 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { db } from '../firebase'; 
 import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore'; 
 
+// --- LOGO NOAR ERP (Estilo Landing) ---
+const NoarLogoLight = () => (
+  <div className="flex items-center gap-3 cursor-pointer group select-none">
+      <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20 group-hover:scale-105 transition-transform">
+          <span className="text-amber-400 font-black text-2xl">N</span>
+      </div>
+      <div className="flex flex-col leading-none">
+          <span className="text-2xl font-black tracking-tighter text-slate-900">
+              NOAR <span className="text-amber-600 font-light tracking-widest text-lg">ERP</span>
+          </span>
+      </div>
+  </div>
+);
+
 // --- Iconos Estilo iOS ---
 const CartIcon = ({ count }) => (
   <div className="relative group cursor-pointer transition-transform active:scale-95">
@@ -26,7 +40,7 @@ const FireIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-
 const UserCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>; 
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
-// --- COMPONENTE VISUAL: SKELETON CARD (Para carga elegante) ---
+// --- COMPONENTE VISUAL: SKELETON CARD ---
 const SkeletonProduct = () => (
   <div className="bg-white rounded-[1.5rem] p-3 border border-gray-100 shadow-sm">
     <div className="aspect-square bg-gray-100 rounded-2xl mb-3 animate-pulse"></div>
@@ -57,20 +71,15 @@ export default function CatalogoPublico() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // --- ESTADO DE CONFIRMACIÓN ---
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // --- LÓGICA VENDEDOR B2B ---
   const [vendorData, setVendorData] = useState(null); 
 
-  // --- Modal Cantidad ---
   const [qtyModalOpen, setQtyModalOpen] = useState(false);
   const [selectedProductForQty, setSelectedProductForQty] = useState(null);
   const [qtyInputValue, setQtyInputValue] = useState('');
   const qtyInputRef = useRef(null);
 
-  // 1. Cargar Datos Generales
   useEffect(() => {
     const unsubProducts = onSnapshot(collection(db, 'productos'), (snap) => {
       setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -91,7 +100,6 @@ export default function CatalogoPublico() {
     return () => { unsubProducts(); unsubCategories(); unsubPromos(); };
   }, []);
 
-  // 4. DETECTAR Y CARGAR VENDEDOR (B2B)
   useEffect(() => {
       const vendorId = searchParams.get('v'); 
       if (vendorId) {
@@ -114,12 +122,10 @@ export default function CatalogoPublico() {
       }
   }, [searchParams]);
 
-  // Resetear página al filtrar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory]);
 
-  // 2. Helper de Precio Base
   const getProductBasePrice = (product) => {
     let basePrice = Number(product.precio);
     if (lista && product.preciosExtra && product.preciosExtra[lista]) {
@@ -157,7 +163,6 @@ export default function CatalogoPublico() {
       return null;
   };
 
-  // Lógica de Regalos (Carrito)
   const calculatedGifts = useMemo(() => {
     const gifts = [];
     promotions.forEach(promo => {
@@ -181,7 +186,6 @@ export default function CatalogoPublico() {
     return gifts;
   }, [cart, promotions, products]);
 
-  // Lógica de Totales
   const cartTotals = useMemo(() => {
     let subTotalBruto = 0;
     const itemDiscounts = {}; 
@@ -229,16 +233,15 @@ export default function CatalogoPublico() {
     return { subTotalBruto, totalFinal: subTotalBruto - totalDescuentos, totalDescuentos, itemDiscounts };
   }, [cart, products, promotions, lista]);
 
-  // Filtros
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCat = selectedCategory ? p.categoriaId === selectedCategory : true;
-      return matchSearch && matchCat && p.stock > 0;
+      // AHORA MOSTRAMOS AUNQUE NO TENGA STOCK (p.stock > 0 removido aquí para gestionarlo visualmente)
+      return matchSearch && matchCat; 
     });
   }, [products, searchTerm, selectedCategory]);
 
-  // --- LÓGICA DE PAGINACIÓN ---
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
@@ -253,6 +256,7 @@ export default function CatalogoPublico() {
   };
 
   const openQtyModal = (product) => {
+    if ((product.stock || 0) <= 0) return; // Bloqueo adicional por seguridad
     setSelectedProductForQty(product);
     setQtyInputValue(cart[product.id] ? String(cart[product.id]) : '1');
     setQtyModalOpen(true);
@@ -262,11 +266,15 @@ export default function CatalogoPublico() {
   const handleQtySubmit = (e) => {
     e.preventDefault();
     const qty = parseInt(qtyInputValue);
+    // Validar stock disponible
+    if (selectedProductForQty && qty > selectedProductForQty.stock) {
+        alert(`Solo hay ${selectedProductForQty.stock} unidades disponibles.`);
+        return;
+    }
     if (!isNaN(qty) && selectedProductForQty) updateCartQty(selectedProductForQty.id, qty);
     setQtyModalOpen(false);
   };
 
-  // --- CHECKOUT Y CONFIRMACIÓN ---
   const handleCheckout = () => {
     const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
     if (totalItems === 0) return;
@@ -307,16 +315,13 @@ export default function CatalogoPublico() {
     const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; 
     const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
     
-    // 1. ABRIR WHATSAPP
     window.open(whatsappUrl, '_blank');
 
-    // 2. REINICIAR Y CONFIRMAR
-    setCart({}); // Vaciar carrito
-    setIsCartOpen(false); // Cerrar bottom sheet
-    setShowSuccess(true); // Mostrar mensaje de éxito
+    setCart({}); 
+    setIsCartOpen(false); 
+    setShowSuccess(true); 
   };
 
-  // --- CARGA ELEGANTE: SKELETON SCREEN ---
   if (loading) return (
     <div className="min-h-screen bg-white font-sans text-gray-900 pb-32">
         <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-100/50">
@@ -351,7 +356,7 @@ export default function CatalogoPublico() {
             <div className="flex justify-between items-center mb-3">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Catálogo</h1>
+                        <NoarLogoLight />
                         {lista && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide border border-blue-100">{lista}</span>}
                     </div>
                     {vendorData && (
@@ -413,13 +418,16 @@ export default function CatalogoPublico() {
                 const { finalPrice, originalPrice, isPromo } = getProductBasePrice(product);
                 const promoBadge = getProductPromoBadge(product); 
                 const qty = cart[product.id] || 0;
+                
+                // --- LÓGICA STOCK ---
+                const hasStock = (product.stock || 0) > 0;
 
                 return (
-                <div key={product.id} className={`group bg-white rounded-[1.5rem] p-3 border transition-all duration-300 relative ${qty > 0 ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'border-gray-100 hover:shadow-xl hover:border-gray-200'}`}>
+                <div key={product.id} className={`group bg-white rounded-[1.5rem] p-3 border transition-all duration-300 relative ${hasStock ? (qty > 0 ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'border-gray-100 hover:shadow-xl hover:border-gray-200') : 'border-red-100 opacity-60 pointer-events-none grayscale'}`}>
                     
                     <div 
                         className="aspect-square bg-gray-50 rounded-2xl relative cursor-pointer overflow-hidden mb-3"
-                        onClick={() => openQtyModal(product)}
+                        onClick={() => hasStock && openQtyModal(product)}
                     >
                         {product.img ? (
                             <img src={product.img} alt={product.nombre} className="w-full h-full object-cover mix-blend-multiply group-hover:scale-110 transition-transform duration-500" loading="lazy" />
@@ -429,12 +437,19 @@ export default function CatalogoPublico() {
                             </div>
                         )}
                         
-                        {promoBadge && (
+                        {/* BADGES */}
+                        {!hasStock && (
+                             <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-90 z-20">
+                                 AGOTADO
+                             </div>
+                        )}
+
+                        {hasStock && promoBadge && (
                             <div className={`absolute top-2 left-2 ${promoBadge.color} text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-95 z-10`}>
                                 {promoBadge.text}
                             </div>
                         )}
-                        {!promoBadge && isPromo && (
+                        {hasStock && !promoBadge && isPromo && (
                             <div className="absolute top-2 left-2 bg-amber-400 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-95 z-10">
                                 OFERTA
                             </div>
@@ -450,14 +465,15 @@ export default function CatalogoPublico() {
                             </h3>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-lg font-extrabold text-gray-900">${finalPrice.toLocaleString('es-AR')}</span>
-                                {isPromo && <span className="text-xs text-gray-400 line-through decoration-gray-300">${originalPrice}</span>}
+                                {isPromo && hasStock && <span className="text-xs text-gray-400 line-through decoration-gray-300">${originalPrice}</span>}
                             </div>
                         </div>
                         <button 
-                            onClick={() => openQtyModal(product)}
-                            className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${qty > 0 ? 'bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
+                            onClick={() => hasStock && openQtyModal(product)}
+                            disabled={!hasStock}
+                            className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${!hasStock ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed' : (qty > 0 ? 'bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100' : 'bg-gray-900 text-white hover:bg-gray-800')}`}
                         >
-                            {qty > 0 ? 'Editar Cantidad' : 'Agregar'}
+                            {hasStock ? (qty > 0 ? 'Editar Cantidad' : 'Agregar') : 'Sin Stock'}
                         </button>
                     </div>
                 </div>
