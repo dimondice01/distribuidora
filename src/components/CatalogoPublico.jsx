@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom'; 
 import { db } from '../firebase'; 
-import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore'; 
+// ✅ AGREGAMOS: addDoc y serverTimestamp para el link corto
+import { collection, onSnapshot, query, where, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore'; 
 
 // --- LOGO NOAR ERP (Estilo Landing) ---
 const NoarLogoLight = () => (
@@ -64,13 +65,15 @@ export default function CatalogoPublico() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   
-  // --- PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // ESTADO DE CARGA AL ENVIAR (Para evitar doble click)
+  const [isSending, setIsSending] = useState(false); 
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [vendorData, setVendorData] = useState(null); 
@@ -237,8 +240,9 @@ export default function CatalogoPublico() {
     return products.filter(p => {
       const matchSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCat = selectedCategory ? p.categoriaId === selectedCategory : true;
-      // AHORA MOSTRAMOS AUNQUE NO TENGA STOCK (p.stock > 0 removido aquí para gestionarlo visualmente)
-      return matchSearch && matchCat; 
+      // ✅ CORRECCIÓN: Ya no filtramos por stock > 0. 
+      // Mostramos todos para que se vea que existen, pero están agotados.
+      return matchSearch && matchCat;
     });
   }, [products, searchTerm, selectedCategory]);
 
@@ -256,7 +260,7 @@ export default function CatalogoPublico() {
   };
 
   const openQtyModal = (product) => {
-    if ((product.stock || 0) <= 0) return; // Bloqueo adicional por seguridad
+    if ((product.stock || 0) <= 0) return; // Bloqueo de seguridad
     setSelectedProductForQty(product);
     setQtyInputValue(cart[product.id] ? String(cart[product.id]) : '1');
     setQtyModalOpen(true);
@@ -266,60 +270,89 @@ export default function CatalogoPublico() {
   const handleQtySubmit = (e) => {
     e.preventDefault();
     const qty = parseInt(qtyInputValue);
-    // Validar stock disponible
+    
+    // Validación extra de stock al escribir manual
     if (selectedProductForQty && qty > selectedProductForQty.stock) {
         alert(`Solo hay ${selectedProductForQty.stock} unidades disponibles.`);
         return;
     }
+
     if (!isNaN(qty) && selectedProductForQty) updateCartQty(selectedProductForQty.id, qty);
     setQtyModalOpen(false);
   };
 
-  const handleCheckout = () => {
+  // ✅ LÓGICA NUEVA: LINK CORTO EN WHATSAPP + FIRESTORE TEMP
+  const handleCheckout = async () => {
     const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
     if (totalItems === 0) return;
 
-    let message = `*¡Hola${vendorData ? ' ' + vendorData.nombre : ''}! Quiero hacer un pedido${lista ? ` (Lista: ${lista})` : ''}:*\n\n`;
-    const itemsForLink = [];
+    setIsSending(true); // Loader en botón
 
-    Object.keys(cart).forEach(id => {
-      const p = products.find(prod => prod.id === id);
-      if (p) {
-        const { finalPrice } = getProductBasePrice(p);
-        const qty = cart[id];
-        const subtotal = finalPrice * qty;
-        message += `📦 ${qty}x ${p.nombre} ($${subtotal.toLocaleString('es-AR')})\n`;
-        itemsForLink.push({ id: p.id, quantity: qty, precioOriginal: finalPrice }); 
-      }
-    });
-
-    if (calculatedGifts.length > 0) {
-        message += `\n*🎁 REGALOS INCLUIDOS:*\n`;
-        calculatedGifts.forEach(gift => {
-            message += `🎉 ${gift.quantity}x ${gift.nombre} (GRATIS)\n`;
+    try {
+        const itemsForLink = [];
+        Object.keys(cart).forEach(id => {
+          const p = products.find(prod => prod.id === id);
+          if (p) {
+            itemsForLink.push({ id: p.id, quantity: cart[id] }); 
+          }
         });
+
+        // 1. Guardar Ticket en Firestore
+        const docRef = await addDoc(collection(db, "pedidos_temporales"), {
+            items: itemsForLink,
+            createdAt: serverTimestamp(),
+            vendedorId: vendorData ? searchParams.get('v') : 'sin_asignar',
+            origen: 'catalogo_web',
+            clienteData: { nombre: 'Web Guest' } // Info extra opcional
+        });
+
+        // 2. Generar Mensaje con Link Corto
+        let message = `*¡Hola${vendorData ? ' ' + vendorData.nombre : ''}! Quiero hacer un pedido${lista ? ` (Lista: ${lista})` : ''}:*\n\n`;
+        
+        // Resumen texto para humano
+        Object.keys(cart).forEach(id => {
+          const p = products.find(prod => prod.id === id);
+          if (p) {
+            const { finalPrice } = getProductBasePrice(p);
+            const qty = cart[id];
+            const subtotal = finalPrice * qty;
+            message += `📦 ${qty}x ${p.nombre} ($${subtotal.toLocaleString('es-AR')})\n`;
+          }
+        });
+
+        if (calculatedGifts.length > 0) {
+            message += `\n*🎁 REGALOS INCLUIDOS:*\n`;
+            calculatedGifts.forEach(gift => {
+                message += `🎉 ${gift.quantity}x ${gift.nombre} (GRATIS)\n`;
+            });
+        }
+
+        if (cartTotals.totalDescuentos > 0) {
+            message += `\n🎉 *Descuentos aplicados: -$${cartTotals.totalDescuentos.toLocaleString('es-AR')}*\n`;
+        }
+
+        message += `\n💰 *Total Estimado: $${cartTotals.totalFinal.toLocaleString('es-AR')}*`;
+        message += `\n\n📍 *[TOCA AQUÍ PARA CARGAR EN APP]* 👇\n`;
+        
+        // EL LINK MAGICO CORTO
+        const webLink = `${window.location.origin}/abrir-pedido?orderId=${docRef.id}`;
+        message += webLink;
+
+        const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; 
+        const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
+        
+        window.open(whatsappUrl, '_blank');
+
+        setCart({}); 
+        setIsCartOpen(false); 
+        setShowSuccess(true); 
+
+    } catch (error) {
+        console.error("Error checkout:", error);
+        alert("Hubo un problema al generar el pedido. Intente nuevamente.");
+    } finally {
+        setIsSending(false);
     }
-
-    if (cartTotals.totalDescuentos > 0) {
-        message += `\n🎉 *Descuentos aplicados: -$${cartTotals.totalDescuentos.toLocaleString('es-AR')}*\n`;
-    }
-
-    message += `\n💰 *Total Estimado: $${cartTotals.totalFinal.toLocaleString('es-AR')}*`;
-    message += `\n\n📍 *[TOCA AQUÍ PARA CARGAR EN APP]* 👇\n`;
-    
-    const jsonPayload = JSON.stringify(itemsForLink);
-    const vendorParam = searchParams.get('v') ? `&v=${searchParams.get('v')}` : '';
-    const webLink = `${window.location.origin}/abrir-pedido?data=${encodeURIComponent(jsonPayload)}${vendorParam}`;
-    message += webLink;
-
-    const targetPhone = vendorData?.telefono ? vendorData.telefono.replace(/\D/g,'') : ''; 
-    const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
-    
-    window.open(whatsappUrl, '_blank');
-
-    setCart({}); 
-    setIsCartOpen(false); 
-    setShowSuccess(true); 
   };
 
   if (loading) return (
@@ -356,11 +389,12 @@ export default function CatalogoPublico() {
             <div className="flex justify-between items-center mb-3">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
+                        {/* ✅ LOGO NOAR ERP */}
                         <NoarLogoLight />
                         {lista && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide border border-blue-100">{lista}</span>}
                     </div>
                     {vendorData && (
-                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5 animate-fade-in">
+                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-1 animate-fade-in">
                             <UserCheckIcon className="w-3 h-3 text-green-500"/> 
                             Atendido por: <span className="text-gray-800 font-bold">{vendorData.nombre}</span>
                         </p>
@@ -419,11 +453,11 @@ export default function CatalogoPublico() {
                 const promoBadge = getProductPromoBadge(product); 
                 const qty = cart[product.id] || 0;
                 
-                // --- LÓGICA STOCK ---
+                // ✅ CONTROL DE STOCK VISUAL
                 const hasStock = (product.stock || 0) > 0;
 
                 return (
-                <div key={product.id} className={`group bg-white rounded-[1.5rem] p-3 border transition-all duration-300 relative ${hasStock ? (qty > 0 ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'border-gray-100 hover:shadow-xl hover:border-gray-200') : 'border-red-100 opacity-60 pointer-events-none grayscale'}`}>
+                <div key={product.id} className={`group bg-white rounded-[1.5rem] p-3 border transition-all duration-300 relative ${hasStock ? (qty > 0 ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'border-gray-100 hover:shadow-xl hover:border-gray-200') : 'border-gray-200 opacity-60 grayscale pointer-events-none select-none'}`}>
                     
                     <div 
                         className="aspect-square bg-gray-50 rounded-2xl relative cursor-pointer overflow-hidden mb-3"
@@ -437,11 +471,11 @@ export default function CatalogoPublico() {
                             </div>
                         )}
                         
-                        {/* BADGES */}
+                        {/* ✅ BADGE AGOTADO */}
                         {!hasStock && (
-                             <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm tracking-wide backdrop-blur-sm bg-opacity-90 z-20">
-                                 AGOTADO
-                             </div>
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/30 backdrop-blur-[1px] z-20">
+                                <div className="bg-red-600 text-white text-xs font-black px-3 py-1 rounded-full shadow-lg transform -rotate-12 border-2 border-white">AGOTADO</div>
+                            </div>
                         )}
 
                         {hasStock && promoBadge && (
@@ -582,15 +616,15 @@ export default function CatalogoPublico() {
                 <div className="mb-6 animate-bounce-short">
                     <CheckCircleIcon />
                 </div>
-                <h2 className="text-2xl font-black text-gray-900 mb-2">¡Pedido Completado!</h2>
+                <h2 className="text-2xl font-black text-gray-900 mb-2">¡Pedido Enviado!</h2>
                 <p className="text-gray-500 mb-8 font-medium leading-relaxed">
-                    Muchas gracias por tu compra.
+                    Serás redirigido a WhatsApp para finalizar.
                 </p>
                 <button 
                     onClick={() => setShowSuccess(false)}
                     className="w-full py-4 rounded-2xl font-bold text-white text-lg bg-green-500 hover:bg-green-600 shadow-xl shadow-green-200 transition-all active:scale-95"
                 >
-                    Aceptar
+                    Entendido
                 </button>
             </div>
         </div>
@@ -674,11 +708,17 @@ export default function CatalogoPublico() {
               </div>
               <button 
                 onClick={handleCheckout}
-                disabled={Object.keys(cart).length === 0}
-                className={`w-full py-4 rounded-2xl font-bold text-white text-lg shadow-xl shadow-green-200/50 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${Object.keys(cart).length === 0 ? 'bg-gray-100 cursor-not-allowed text-gray-400 shadow-none' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:to-emerald-700'}`}
+                disabled={Object.keys(cart).length === 0 || isSending}
+                className={`w-full py-4 rounded-2xl font-bold text-white text-lg shadow-xl shadow-green-200/50 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${Object.keys(cart).length === 0 || isSending ? 'bg-gray-100 cursor-not-allowed text-gray-400 shadow-none' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:to-emerald-700'}`}
               >
-                {/* 8. BOTÓN PERSONALIZADO */}
-                {vendorData ? `Enviar a ${vendorData.nombre}` : 'Confirmar por WhatsApp'}
+                {/* 8. BOTÓN PERSONALIZADO CON LOADING */}
+                {isSending ? (
+                    <span className="flex items-center gap-2 animate-pulse">
+                        Enviando...
+                    </span>
+                ) : (
+                    vendorData ? `Enviar a ${vendorData.nombre}` : 'Confirmar por WhatsApp'
+                )}
               </button>
             </div>
           </div>
