@@ -15,7 +15,11 @@ import ReporteGeneral from "./ReporteGeneral.jsx";
 import Zonas from './Zonas.jsx';
 import Promotions from './Promotions.jsx'; 
 import Caja from './Caja.jsx';
-import ClienteDetalle from './ClienteDetalle.jsx'; 
+import ClienteDetalle from './ClienteDetalle.jsx';
+
+// ✅ INTEGRACIONES (Backend Modules)
+import IntegrationsPage from './IntegrationsPage.jsx';   // AFIP / ARCA
+import IntegrationsPageMP from './IntegrationsPageMP.jsx'; // MERCADO PAGO
 
 // --- ESTILOS GLOBALES ---
 const scrollbarStyles = `
@@ -58,12 +62,16 @@ const icons = {
   facturacion: <Icono path="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />,
   caja: <Icono path="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
   rutas: <Icono path="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" d2="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />,
-  gastos: <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />,
+  gastos: <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />,
   reporteG: <Icono path="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" d2="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />,
   reporteV: <Icono path="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m1-3l1 3m0 0l-1 3m1-3l1 3M6.75 12h.008v.008H6.75V12zm3.75 0h.008v.008H10.5V12zm3.75 0h.008v.008H14.25V12z" />,
   logout: <Icono path="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />,
   collapse: <Icono path="M15.75 19.5L8.25 12l7.5-7.5" />,
   expand: <Icono path="M8.25 4.5l7.5 7.5-7.5 7.5" />,
+  // ✅ ICONO ARCA
+  integraciones: <Icono path="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-16.5 0h13.5m-13.5 0a3 3 0 100 6h13.5a3 3 0 100-6" />,
+  // ✅ NUEVO ICONO MP: Tarjeta de Crédito (Estilo Noar)
+  mp: <Icono path="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />,
 };
 
 // --- ORGANIZACIÓN LÓGICA (ORDEN DE LOGÍSTICA) ---
@@ -92,6 +100,9 @@ const navSections = [
       { name: 'Vendedores', icon: icons.vendedores },
       { name: 'Zonas', icon: icons.zonas },
       { name: 'Gastos', icon: icons.gastos },
+      // ✅ NUEVOS ITEMS DE INTEGRACIÓN
+      { name: 'Integración ARCA', icon: icons.integraciones }, 
+      { name: 'Integración MercadoPago', icon: icons.mp }, 
     ]
   },
   {
@@ -145,7 +156,6 @@ function NavItem({ item, activeTab, setActiveTab, isSidebarOpen }) {
 // --- LAYOUT PRINCIPAL ---
 function Dashboard({ user }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  // Iniciamos con 'Facturación' que es lo más importante
   const [activeTab, setActiveTab] = useState('Facturación');
   const [selectedClientId, setSelectedClientId] = useState(null);
 
@@ -177,6 +187,11 @@ function Dashboard({ user }) {
       case 'Gastos': return <Gastos />;
       case "Rubros": return <Rubros />;
       case 'ClienteDetalle': return <ClienteDetalle clienteId={selectedClientId} onBack={handleBackToTabs} />;
+      
+      // ✅ NUEVOS CASES: Pantallas de Configuración
+      case 'Integración ARCA': return <IntegrationsPage />;
+      case 'Integración MercadoPago': return <IntegrationsPageMP />;
+      
       default: return <Facturacion />;
     }
   };
@@ -195,7 +210,7 @@ function Dashboard({ user }) {
         <div className="h-20 flex items-center justify-between px-5 bg-slate-950 border-b border-slate-800">
           {isSidebarOpen && (
             <div className="flex flex-col animate-fade-in">
-                {/* --- NUEVO LOGO NOAR ERP --- */}
+                {/* --- LOGO NOAR ERP --- */}
                 <NoarLogoDark />
             </div>
           )}

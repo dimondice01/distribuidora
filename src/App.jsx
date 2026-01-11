@@ -4,14 +4,18 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; 
 import { auth } from './firebase.js';
 import { onAuthStateChanged } from 'firebase/auth';
-import { toast } from 'react-toastify'; // Importamos toast para usarlo en los eventos
+import { toast } from 'react-toastify'; 
 
-// Componentes
-import LandingPage from './components/landingPage.jsx'; // ✅ Asegúrate que el archivo se llame así (PascalCase) o ajusta a 'landingPage.jsx'
+// Componentes Principales
+import LandingPage from './components/landingPage.jsx'; 
 import LoginScreen from './components/LoginScreen.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CatalogoPublico from './components/CatalogoPublico.jsx'; 
 import RedirectToApp from './components/RedirectToApp.jsx'; 
+
+// ✅ INTEGRACIONES (Módulos Backend)
+import IntegrationsPage from './components/IntegrationsPage.jsx';   // AFIP / ARCA
+import IntegrationsPageMP from './components/IntegrationsPageMP.jsx'; // MERCADO PAGO
 
 // Librería de Notificaciones
 import { ToastContainer } from 'react-toastify';
@@ -84,24 +88,45 @@ function App() {
         <Routes>
           
           {/* --- RUTA LANDING PAGE (INFO) --- */}
-          {/* Ahora accesible en tudominio.com/informacion */}
           <Route path="/informacion" element={<LandingPage />} />
 
           {/* --- RUTA PÚBLICA (Catálogo) --- */}
           <Route path="/catalogo/:lista?" element={<CatalogoPublico />} />
 
-          {/* ✅ RUTA PUENTE PARA WHATSAPP */}
+          {/* RUTA PUENTE PARA WHATSAPP */}
           <Route path="/abrir-pedido" element={<RedirectToApp />} />
 
           {/* --- RUTA DE LOGIN --- */}
           <Route path="/login" element={!user ? <LoginScreen /> : <Navigate to="/" />} />
 
-          {/* --- RUTA PRIVADA (Dashboard) --- */}
+          {/* --- RUTAS PRIVADAS (Requieren Login) --- */}
+          
+          {/* 1. Dashboard Principal */}
           <Route 
             path="/" 
             element={
               <RequireAuth>
                 <Dashboard user={user} />
+              </RequireAuth>
+            } 
+          />
+
+          {/* 2. ✅ INTEGRACIÓN AFIP / ARCA */}
+          <Route 
+            path="/integraciones" 
+            element={
+              <RequireAuth>
+                <IntegrationsPage />
+              </RequireAuth>
+            } 
+          />
+
+          {/* 3. ✅ INTEGRACIÓN MERCADO PAGO */}
+          <Route 
+            path="/integraciones-mp" 
+            element={
+              <RequireAuth>
+                <IntegrationsPageMP />
               </RequireAuth>
             } 
           />
