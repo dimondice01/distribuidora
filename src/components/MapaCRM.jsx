@@ -161,8 +161,12 @@ export default function MapaCRM({ onViewClient }) {
         visitas
             .filter(v => v.ubicacion?.lat && v.ubicacion?.lng)
             .map(v => {
+                const vts = v.fecha?.toDate?.() ?? new Date(v.timestamp);
                 const venta = v.resultado === 'con_venta'
-                    ? ventas.find(vt => vt.clienteId === v.clienteId && Math.abs((vt.fecha?.toDate?.() ?? new Date()) - (v.fecha?.toDate?.() ?? new Date(v.timestamp))) < 60000)
+                    ? ventas.find(vt => {
+                        const vtf = vt.fecha?.toDate?.() ?? new Date();
+                        return vt.clienteId === v.clienteId && vtf.toDateString() === vts.toDateString();
+                      })
                     : null;
                 return {
                     ...v,
