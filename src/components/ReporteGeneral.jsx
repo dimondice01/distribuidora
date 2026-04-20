@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../firebase.js'; 
 import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 // --- Iconos SVG (Estilo iOS) ---
 const TrendingUp = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 6 13.5 15.5 10 12 1 21"></polyline><path d="M22 6h-6v6"/></svg>;
 const TrendingDown = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>;
@@ -130,24 +131,20 @@ function ReporteGeneral() {
 
     const gananciaBruta = totals.totalVenta - totals.totalCosto - totals.totalCostoDevoluciones;
 
-    // --- CARGA DE DATOS (Filtrado Mejorado) ---
+    const { tenantId, onTenantSnapshot } = useFirestore();
+
+    // --- CARGA DE DATOS (Filtrado por Tenant y Fecha) ---
     useEffect(() => {
+        if (!tenantId) {
+            setVentas([]);
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         
-        // Convertir fechas locales a Timestamp de Firestore para la query
-        const startTs = Timestamp.fromDate(startDate);
-        const endTs = Timestamp.fromDate(endDate);
-
-        // NOTA: Firestore requiere índices compuestos para range filters en diferentes campos.
-        // Para simplificar y evitar errores de índice, traemos por fecha de creación y filtramos en cliente.
-        // O traemos todo si el rango es corto. Aquí usaremos 'fecha' como base.
-        
-        const q = query(
-            collection(db, "ventas"),
-            orderBy("fecha", "desc")
-        );
-
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        // Usamos onTenantSnapshot para inyectar automáticamente el filtro de companyId
+        const unsubscribe = onTenantSnapshot('ventas', (querySnapshot) => {
             const ventasData = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
@@ -177,19 +174,13 @@ function ReporteGeneral() {
                 }
             });
             
-            // Ordenar por fecha descendente
-            ventasData.sort((a, b) => b.fecha - a.fecha);
-            
             setVentas(ventasData);
             setCurrentPage(1);
             setIsLoading(false);
-        }, (error) => {
-            console.error("Error al obtener ventas: ", error);
-            setIsLoading(false);
-        });
+        }, [{ field: "fecha", direction: "desc" }]); // Orden por fecha desc
 
         return () => unsubscribe();
-    }, [startDate, endDate]);
+    }, [startDate, endDate, tenantId]);
 
     
     // --- Paginación ---

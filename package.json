@@ -1,27 +1,29 @@
 {
-  "name": "desktop-app",
+  "name": "distribuidora",
   "private": true,
   "version": "1.0.0",
   "description": "Sistema de Distribuidora",
-  "main": "main.js",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "electron:dev": "electron .",
-    "electron:build": "npm run build && electron-builder"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "date-fns": "^4.1.0",
     "firebase": "^12.3.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.562.0",
     "node-forge": "^1.3.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.9.6",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
@@ -29,8 +31,6 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
-    "electron": "^38.3.0",
-    "electron-builder": "^26.0.12",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
@@ -38,23 +38,8 @@
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
     "tailwindcss": "^3.4.18",
-    "vite": "^7.1.7"
-  },
-  "build": {
-    "appId": "com.tuempresa.sistemadistribuidora",
-    "productName": "Sistema de Distribuidora",
-    "files": [
-      "dist/**/*",
-      "main.js",
-      "preload.js",
-      "package.json"
-    ],
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "vite": "^7.1.7",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
+

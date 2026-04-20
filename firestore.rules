@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- FUNCIONES DE AYUDA (HELPERS) ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Obtiene los datos del usuario de la colección raíz /users
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // 🔥 REGLA DE ARRANQUE (BOOTSTRAP): Mantiene la seguridad industrial inicial
+    function isSuperAdmin() {
+      let isInitialized = exists(/databases/$(database)/documents/config/access_control);
+      let isAdmin = exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+      return isSignedIn() && (isAdmin || !isInitialized);
+    }
+
+    function belongsToCompany(companyId) {
+        return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    }
+
+    // --- REGLAS POR COLECCIÓN ---
+
+    // 1. Usuarios (RAÍZ - Con visibilidad para administradores de la misma empresa)
+    match /users/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        ((getUserData().role == 'admin' || getUserData().role == 'administrador') && getUserData().companyId == resource.data.companyId)
+      );
+      allow create: if isSignedIn(); 
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        ((getUserData().role == 'admin' || getUserData().role == 'administrador') && getUserData().companyId == resource.data.companyId)
+      );
+    }
+
+    // 2. Marcador de Inicialización (Config Global)
+    match /config/access_control {
+      allow read: if true;
+      allow create: if isSignedIn();
+    }
+
+    // 3. Colección de Compañías (JERARQUÍA INDUSTRIAL + CATÁLOGO PÚBLICO)
+    match /companies/{companyId} {
+      // 🛡️ ACCESO PÚBLICO AL BRANDING (Logo, Nombre, Config Pública)
+      allow read: if true; 
+      allow write: if isSuperAdmin();
+
+      // --- SUB-COLECCIONES PÚBLICAS ---
+      match /productos/{docId} { allow read: if true; }
+      match /categorias/{docId} { allow read: if true; }
+      match /promociones/{docId} { allow read: if true; }
+      match /vendedores/{docId} { allow read: if true; }
+      match /config/{docId} { allow read: if true; } // Crítico para nombre de fantasía
+      match /pedidos_temporales/{docId} { allow create: if true; }
+
+      // REGLA MAESTRA PARA DATOS PRIVADOS (Caja, Facturacion, Clientes)
+      match /{allSubcollections=**} {
+        allow read, write: if isSignedIn() && (belongsToCompany(companyId) || isSuperAdmin());
+      }
+    }
+
+    // 4. Fallback de Seguridad
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

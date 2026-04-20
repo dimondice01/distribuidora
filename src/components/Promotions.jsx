@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, doc, deleteDoc, getDocs, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, deleteDoc, getDocs, addDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { toast } from 'react-toastify';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 // --- ICONOS SVG ---
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
 const EditIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -13,6 +14,7 @@ const GiftIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={20} h
 //  COMPONENTE INTERNO: PromotionModal (El Formulario)
 // ============================================================================
 const PromotionModal = ({ onClose, promoToEdit }) => {
+    const { tenantId, addTenantDoc, getTenantCollection, getTenantDoc, updateTenantDoc } = useFirestore();
     const [step, setStep] = useState(1);
     const [promoType, setPromoType] = useState('');
 
@@ -43,22 +45,24 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
     const [cantidadRegalo, setCantidadRegalo] = useState('');
     const [giftProductId, setGiftProductId] = useState('');
 
-    // Cargar productos
+    // Cargar productos (Multi-Tenant)
     useEffect(() => {
         const fetchProducts = async () => {
+            if (!tenantId) return;
             try {
-                const productsQuery = await getDocs(collection(db, 'productos'));
+                const q = getTenantCollection('productos');
+                const productsQuery = await getDocs(q);
                 const items = productsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 items.sort((a, b) => a.nombre.localeCompare(b.nombre));
                 setProducts(items);
                 setFilteredProducts(items);
-                setFilteredGiftProducts(items); // Inicializar lista de regalos
+                setFilteredGiftProducts(items); 
             } catch (error) {
                 console.error("Error cargando productos:", error);
             }
         };
         fetchProducts();
-    }, []);
+    }, [tenantId]);
 
     // Cargar datos si es Edición
     useEffect(() => {
@@ -173,10 +177,10 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
 
         try {
             if (promoToEdit) {
-                await updateDoc(doc(db, 'promociones', promoToEdit.id), promoData);
+                await updateTenantDoc('promociones', promoToEdit.id, promoData);
                 toast.success('¡Promoción actualizada!');
             } else {
-                await addDoc(collection(db, 'promociones'), promoData);
+                await addTenantDoc('promociones', promoData);
                 toast.success('¡Promoción creada!');
             }
             onClose();
@@ -351,15 +355,21 @@ const Promotions = () => {
     const [editingPromo, setEditingPromo] = useState(null);
     const [promoToDelete, setPromoToDelete] = useState(null);
 
+    const { tenantId, onTenantSnapshot, deleteTenantDoc } = useFirestore();
+
     useEffect(() => {
+        if (!tenantId) {
+            setPromotions([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
-        const q = query(collection(db, 'promociones'));
-        const unsub = onSnapshot(q, (snap) => {
+        const unsub = onTenantSnapshot('promociones', (snap) => {
             setPromotions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
         });
         return () => unsub();
-    }, []);
+    }, [tenantId]);
 
     const handleOpenModal = (promo = null) => {
         setEditingPromo(promo);
@@ -369,7 +379,7 @@ const Promotions = () => {
     const handleDelete = async () => {
         if (!promoToDelete) return;
         try {
-            await deleteDoc(doc(db, 'promociones', promoToDelete.id));
+            await deleteTenantDoc('promociones', promoToDelete.id);
             toast.success("Promoción eliminada.");
             setPromoToDelete(null);
         } catch (error) {

@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase.js';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, serverTimestamp } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'; 
+import { initializeApp, deleteApp } from 'firebase/app'; 
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
+
+// --- CONFIGURACIÓN DE APP SECUNDARIA ---
+const secondaryFirebaseConfig = {
+  apiKey: "AIzaSyC0JqOWRdkmFjBoAQN7igM_a2qKysYW2Kk",
+  authDomain: "noarerp.firebaseapp.com",
+  projectId: "noarerp",
+  storageBucket: "noarerp.firebasestorage.app",
+  messagingSenderId: "249887928589",
+  appId: "1:249887928589:web:52105c219280985b4d0044",
+};
 
 // --- Iconos SVG ---
 const EditIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
@@ -20,7 +32,6 @@ function Vendedores() {
   const [vendedores, setVendedores] = useState([]);
   const [zonas, setZonas] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // 1. ESTADO ACTUALIZADO: Agregado campo telefono
   const [formData, setFormData] = useState({ nombreCompleto: '', username: '', email: '', password: '', telefono: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
   const [editingVendedorId, setEditingVendedorId] = useState(null);
   const [error, setError] = useState('');
@@ -31,28 +42,28 @@ function Vendedores() {
   const [itemsPerPage] = useState(15);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const { tenantId, onTenantSnapshot, updateTenantDoc, getTenantDoc, deleteTenantDoc } = useFirestore();
 
   useEffect(() => {
-    // Cargar Vendedores
-    const unsubscribeVendedores = onSnapshot(query(collection(db, 'vendedores'), orderBy('nombreCompleto')), (snapshot) => {
+    if (!tenantId) return;
+
+    const unsubscribeVendedores = onTenantSnapshot('vendedores', (snapshot) => {
       setVendedores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setCurrentPage(1);
-    });
+    }, [{ field: 'nombreCompleto', direction: 'asc' }]);
     
-    // Cargar Zonas
-    const unsubscribeZonas = onSnapshot(query(collection(db, 'zonas'), orderBy('nombre')), (snapshot) => {
+    const unsubscribeZonas = onTenantSnapshot('zonas', (snapshot) => {
         setZonas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, [{ field: 'nombre', direction: 'asc' }]);
 
     return () => {
         unsubscribeVendedores();
         unsubscribeZonas();
     };
-  }, []);
+  }, [tenantId]);
 
   const openModalForAdd = () => {
     setEditingVendedorId(null);
-    // 2. RESET FORM: Incluye telefono vacío
     setFormData({ nombreCompleto: '', username: '', email: '', password: '', telefono: '', rango: ROLES.VENDEDOR, zonasAsignadas: [] });
     setError('');
     setIsModalOpen(true);
@@ -60,13 +71,12 @@ function Vendedores() {
 
   const openModalForEdit = (vendedor) => {
     setEditingVendedorId(vendedor.id);
-    // 3. CARGA EDITAR: Carga el telefono existente
     setFormData({
       nombreCompleto: vendedor.nombreCompleto,
       username: vendedor.username,
       email: vendedor.email,
       password: '',
-      telefono: vendedor.telefono || '', // Carga o vacío
+      telefono: vendedor.telefono || '', 
       rango: vendedor.rango || ROLES.VENDEDOR,
       zonasAsignadas: vendedor.zonasAsignadas || []
     });
@@ -74,7 +84,6 @@ function Vendedores() {
     setIsModalOpen(true);
   };
 
-  // Manejador para los checkboxes de zonas
   const handleZoneChange = (zoneId) => {
     setFormData(prev => {
         const zonasAsignadas = (prev.zonasAsignadas || []).includes(zoneId)
@@ -93,37 +102,73 @@ function Vendedores() {
       return;
     }
     
+    const currentAdminTenantId = tenantId; 
+    if (!currentAdminTenantId) {
+        setError("Error de sesión: No se detectó compañía activa del administrador.");
+        return;
+    }
+
+    let secondaryApp = null;
+    
     try {
       if (editingVendedorId) {
-        const vendedorRef = doc(db, 'vendedores', editingVendedorId);
-        // 4. UPDATE: Guarda el teléfono al editar
-        await updateDoc(vendedorRef, {
+        // 1. Actualizar en la subcolección de la compañía
+        await updateTenantDoc('vendedores', editingVendedorId, {
           nombreCompleto: formData.nombreCompleto,
           username: formData.username,
           telefono: formData.telefono,
           rango: formData.rango,
           zonasAsignadas: formData.zonasAsignadas
         });
+
+        // 2. Sincronizar con la colección raíz 'users' para la App Móvil
+        const vendedorDoc = vendedores.find(v => v.id === editingVendedorId);
+        if (vendedorDoc?.firebaseAuthUid) {
+            const roleForApp = formData.rango === ROLES.REPARTO ? 'repartidor' : formData.rango.toLowerCase();
+            await updateDoc(doc(db, 'users', vendedorDoc.firebaseAuthUid), {
+                role: roleForApp,
+                companyId: currentAdminTenantId,
+                zonasAsignadas: formData.zonasAsignadas // Sincronizamos zonas
+            });
+            console.log(`✅ Rol actualizado en users/${vendedorDoc.firebaseAuthUid} a: ${roleForApp}`);
+        }
       } else {
         if (!formData.password || formData.password.length < 6) {
           setError("La contraseña es obligatoria y debe tener al menos 6 caracteres.");
           return;
         }
 
-        // 1. Crear usuario en Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        secondaryApp = initializeApp(secondaryFirebaseConfig, "SecondaryRegistrationApp");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formData.email, formData.password);
         const newUser = userCredential.user;
 
-        // 5. CREATE: Guarda el teléfono al crear
-        await setDoc(doc(db, 'vendedores', newUser.uid), {
+        // 3. Crear el perfil en 'vendedores' (DENTRO de la subcolección privada de la empresa)
+        await setDoc(getTenantDoc('vendedores', newUser.uid), {
+          companyId: currentAdminTenantId,
           nombreCompleto: formData.nombreCompleto,
           username: formData.username,
           email: formData.email,
           telefono: formData.telefono,
           rango: formData.rango,
           zonasAsignadas: formData.zonasAsignadas,
-          firebaseAuthUid: newUser.uid
+          firebaseAuthUid: newUser.uid,
+          createdAt: serverTimestamp()
         });
+
+        // 4. Sincronizar con la colección raíz 'users' para la App Móvil
+        const roleForApp = formData.rango === ROLES.REPARTO ? 'repartidor' : formData.rango.toLowerCase();
+        await setDoc(doc(db, 'users', newUser.uid), {
+            email: formData.email.toLowerCase().trim(),
+            companyId: currentAdminTenantId,
+            role: roleForApp,
+            zonasAsignadas: formData.zonasAsignadas, // Sincronizamos zonas al crear
+            createdAt: serverTimestamp()
+        });
+
+        await signOut(secondaryAuth);
+        console.log("✅ Usuario creado exitosamente sin perder sesión administrativa.");
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -133,6 +178,10 @@ function Vendedores() {
         setError("No se pudo guardar el vendedor. Revisa los datos.");
       }
       console.error("Error al guardar vendedor:", err);
+    } finally {
+        if (secondaryApp) {
+            await deleteApp(secondaryApp);
+        }
     }
   };
 
@@ -140,22 +189,19 @@ function Vendedores() {
     const id = vendedorToDelete.id;
     setVendedorToDelete(null);
     try {
-        await deleteDoc(doc(db, 'vendedores', id));
+        await deleteTenantDoc('vendedores', id);
     } catch (error) {
       console.error("Error al eliminar vendedor:", error);
       setError("No se pudo eliminar el vendedor.");
     }
   };
     
-    // --- Lógica de Filtrado y Paginación ---
-    
     const filteredVendedores = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        const filtered = vendedores.filter(vendedor => {
+        return vendedores.filter(vendedor => {
             return (vendedor.nombreCompleto || '').toLowerCase().includes(term) ||
                    (vendedor.email || '').toLowerCase().includes(term);
         });
-        return filtered;
     }, [vendedores, searchTerm]);
 
     const totalPages = Math.ceil(filteredVendedores.length / itemsPerPage);
@@ -170,11 +216,9 @@ function Vendedores() {
         setCurrentPage(pageNumber);
     };
     
-    // Resetea la página al cambiar el término de búsqueda
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm]);
-
 
   const getRoleBadge = (role) => {
     switch (role) {
@@ -189,7 +233,6 @@ function Vendedores() {
     }
   };
 
-  // Función para mostrar los nombres de las zonas
   const getZonasNombres = (zonasIds = []) => {
     if (zonasIds.length === 0) return 'Ninguna';
     return zonasIds.map(id => {
@@ -207,7 +250,6 @@ function Vendedores() {
         </Button>
       </div>
       
-      {/* Filtro de Búsqueda */}
       <div className="flex items-center space-x-4 mb-4">
             <div className="relative flex-grow">
                 <input type="text" placeholder="Buscar por nombre o email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
@@ -257,7 +299,6 @@ function Vendedores() {
         </table>
       </div>
       
-      {/* Controles de Paginación */}
       {totalPages > 1 && (
           <div className="flex justify-center items-center mt-4 space-x-4">
               <button
@@ -280,7 +321,6 @@ function Vendedores() {
           </div>
       )}
 
-
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 animate-fade-in">
           <div className="w-full max-w-lg p-6 bg-white rounded-lg shadow-xl">
@@ -301,7 +341,6 @@ function Vendedores() {
                 </div>
               </div>
               
-              {/* SECCIÓN DE CONTACTO: EMAIL Y TELÉFONO */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -332,7 +371,6 @@ function Vendedores() {
                 )}
               </div>
 
-              {/* Selector de Zonas */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Zonas Asignadas</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-32 overflow-y-auto p-2 border rounded-md">
@@ -360,7 +398,6 @@ function Vendedores() {
         </div>
       )}
       
-      {/* Modal de Confirmación de Eliminación */}
       {vendedorToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
               <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl">

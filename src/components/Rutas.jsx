@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
 import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
+import { useFirestore } from '../hooks/useFirestore';
+import { useTenant } from '../contexts/TenantContext';
+import RouteMapMonitor from './RouteMapMonitor';
 
 // Inicializamos Cloud Functions
 const functions = getFunctions(); 
@@ -60,12 +63,70 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
     return `<html><head><title>Reporte de Carga - ${routeName}</title><style>body{font-family: Arial, sans-serif; margin: 20px;} h1, h2, h3 {color: #333;} table{width: 100%; border-collapse: collapse; margin-top: 20px;} th, td{padding: 12px; text-align: left;} thead{background-color: #f2f2f2;}</style></head><body><h1>Reporte de Carga para Depósito</h1><h2>Ruta: ${routeName}</h2><h3>Repartidor: ${repartidorNombre}</h3><p>Fecha de Emisión: ${new Date().toLocaleString('es-AR')}</p><hr/><table><thead><tr><th style="width:150px;">Cantidad a Cargar</th><th>Producto</th></tr></thead><tbody>${itemsRows}</tbody></table></body></html>`;
 };
 
-// --- AUXILIAR: GENERADOR DE QR AFIP ---
-const getAfipQrUrl = (venta) => {
-    if (!venta.afipCAE) return null;
+const generateRouteListHTML = (invoices, routeName, repartidorNombre) => {
+    let totalRuta = 0;
+    const clientRows = invoices.map((inv, index) => {
+        totalRuta += inv.totalVenta || 0;
+        return `
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; width: 40px; font-size: 12px;">${index + 1}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; font-size: 14px;">${inv.clienteNombre}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px; color: #555;">${inv.clienteDireccion || 'S/D'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; font-size: 14px;">${formatCurrency(inv.totalVenta)}</td>
+            </tr>
+        `;
+    }).join('');
 
-    const CUIT_EMISOR = 27278612932; 
-    const PTO_VTA = 5; 
+    return `
+    <html>
+    <head><title>Listado de Ruta - ${routeName}</title>
+    <style>
+        body{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; color: #333;}
+        h1, h2, h3 {color: #1e293b; margin: 5px 0;}
+        table{width: 100%; border-collapse: collapse; margin-top: 20px;}
+        th, td{padding: 10px; text-align: left;}
+        thead{background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;}
+        th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
+    </style>
+    </head>
+    <body>
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 10px;">
+            <h1 style="font-size: 24px;">Hoja de Ruta (Visitas y Cobranzas)</h1>
+            <h2 style="font-size: 16px; color: #475569;">${routeName}</h2>
+            <h3 style="font-size: 14px; font-weight: normal;">Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h3>
+        </div>
+        <p style="font-size: 10px; color: #94a3b8; text-align: right; margin-top: -30px;">Emitido: ${new Date().toLocaleString('es-AR')}</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align: center;">Parada</th>
+                    <th>Cliente</th>
+                    <th>Dirección</th>
+                    <th style="text-align: right;">Monto a Cobrar</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${clientRows}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="text-align: right; padding: 15px; font-size: 14px; color: #64748b; text-transform: uppercase;">Total Esperado en Ruta:</td>
+                    <td style="text-align: right; padding: 15px; font-size: 20px; font-weight: 900; background: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px solid #e2e8f0;">${formatCurrency(totalRuta)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </body>
+    </html>
+    `;
+};
+
+// --- AUXILIAR: GENERADOR DE QR AFIP ---
+const getAfipQrUrl = (venta, config) => {
+    if (!venta.afipCAE || !config) return null;
+
+    const CUIT_EMISOR = parseInt(config.cuit?.replace(/-/g, '') || 0); 
+    const PTO_VTA = parseInt(config.ptoVta || 5); 
     
     let tipoCmp = 11; // C
     if (venta.afipLetra === 'A') tipoCmp = 1;
@@ -102,7 +163,7 @@ const getAfipQrUrl = (venta) => {
 };
 
 // --- PDF DE FACTURA "AFIP COMPACTO & LIMPIO" ---
-const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
+const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) => {
     const fechaImpresion = venta.fecha ? (venta.fecha instanceof Date ? venta.fecha : new Date(venta.fecha.seconds * 1000)) : new Date();
     
     const tieneCAE = !!venta.afipCAE;
@@ -110,17 +171,20 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
     const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
     
-    const ptoVtaStr = "00005";
+    const ptoVtaStr = String(config?.ptoVta || "00001").padStart(5, '0');
     const numCompStr = String(venta.afipNumeroComprobante || venta.id.substring(0, 8)).padStart(8, '0');
     const numeroCompleto = `${ptoVtaStr}-${numCompStr}`;
 
-    const qrUrl = getAfipQrUrl(venta);
+    const qrUrl = getAfipQrUrl(venta, config);
 
     // Condición IVA Abreviada
     const condIvaTexto = venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : venta.clienteCondicionIVA === 'MT' ? 'Monotributo' : 'Cons. Final';
 
     // Fecha Vencimiento formateada
     const vtoCaeFormateado = venta.afipFechaVtoCAE ? formatAfipDate(venta.afipFechaVtoCAE) : '';
+
+    const isRI = config?.taxCondition === 'RI' || config?.taxCondition === 'RESPONSABLE_INSCRIPTO';
+    const isMT = !isRI;
 
     const itemsHtml = (venta.items || []).map((item, index) => `
         <tr style="border-bottom: 1px solid #ccc;">
@@ -166,25 +230,33 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
             <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <div style="width: 30px; height: 30px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 18px; font-family: Arial, sans-serif;">N</div>
-                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px; font-family: Arial, sans-serif;">NOAR <span style="color: #d97706; font-weight: 300; letter-spacing: 2px; font-size: 14px;">ERP</span></div>
+                    ${config?.logo ? `
+                        <img src="${config.logo}" alt="Logo" style="max-height: 50px; max-width: 180px; object-fit: contain; object-position: left;">
+                    ` : `
+                        <div style="width: 35px; height: 35px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 20px; font-family: Arial, sans-serif;">
+                            ${(config?.nombreFantasia || config?.name || 'D')[0].toUpperCase()}
+                        </div>
+                        <div style="font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px; font-family: Arial, sans-serif;">
+                            ${config?.nombreFantasia || config?.name || ''}
+                        </div>
+                    `}
                 </div>
 
                 <p style="margin: 0; font-size: 9px; line-height: 1.3;">
-                    <strong>Distribuidora La Llave</strong><br>
-                    <strong>Domicilio:</strong> Dirección Real, La Rioja<br>
-                    <strong>Condición IVA:</strong> Monotributo
+                    <strong>${config?.nombreFantasia || config?.name || ''}</strong><br>
+                    <strong>Domicilio:</strong> ${config?.domicilioFiscal || ''}<br>
+                    <strong>Condición IVA:</strong> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
                 </p>
             </div>
 
             <div style="width: 50%; float: right; padding: 10px 10px 10px 40px; box-sizing: border-box;">
                 <h2 style="margin: 0 0 5px 0; font-size: 16px;">${tituloComprobante}</h2>
                 <p style="margin: 0; font-size: 10px; line-height: 1.4;">
-                    <strong>Punto de Venta: 00005</strong> &nbsp; <strong>Comp. Nro: ${numCompStr}</strong><br>
+                    <strong>Punto de Venta: ${ptoVtaStr}</strong> &nbsp; <strong>Comp. Nro: ${numCompStr}</strong><br>
                     <strong>Fecha de Emisión:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                    <strong>CUIT:</strong> 27-27861293-2 <br>
-                    <strong>Ing. Brutos:</strong> 27-27861293-2 <br>
-                    <strong>Inicio de Actividades:</strong> 01/01/2024
+                    <strong>CUIT:</strong> ${config?.cuit || ''} <br>
+                    <strong>Ing. Brutos:</strong> ${config?.iibb || ''} <br>
+                    <strong>Inicio de Actividades:</strong> ${config?.inicioActividades || ''}
                 </p>
             </div>
         </div>
@@ -236,10 +308,21 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre) => {
 
             <div style="width: 35%; border-left: 1px solid #000;">
                 <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                    ${isRI && letra === 'A' ? `
+                    <tr>
+                        <td style="padding: 3px 15px 3px 5px; text-align: right;"><strong>Neto Gravado:</strong></td>
+                        <td style="padding: 3px 15px 3px 5px; text-align: right;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 3px 15px 3px 5px; text-align: right;"><strong>IVA (21%):</strong></td>
+                        <td style="padding: 3px 15px 3px 5px; text-align: right;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                    </tr>
+                    ` : `
                     <tr>
                         <td style="padding: 5px 15px 5px 5px; text-align: right;"><strong>Subtotal:</strong></td>
                         <td style="padding: 5px 15px 5px 5px; text-align: right;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
+                    `}
                     <tr style="background: #ddd; border-top: 1px solid #000;">
                         <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>TOTAL:</strong></td>
                         <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>${formatCurrency(venta.totalVenta)}</strong></td>
@@ -256,10 +339,12 @@ const generateSettlementReportHTML = (route, invoices) => {
     const resumen = invoices.reduce((acc, fac) => {
         acc.efectivo += fac.pagoEfectivo || 0;
         acc.transferencia += fac.pagoTransferencia || 0;
+        acc.qr += fac.pagoQR || 0;
+        acc.point += fac.pagoPoint || 0;
         acc.saldoPendiente += fac.saldoPendiente || 0;
         acc.totalVenta += fac.totalVenta || 0;
         return acc;
-    }, { efectivo: 0, transferencia: 0, saldoPendiente: 0, totalVenta: 0 });
+    }, { efectivo: 0, transferencia: 0, qr: 0, point: 0, saldoPendiente: 0, totalVenta: 0 });
 
     const devolucionesSummary = new Map();
     invoices.forEach(invoice => {
@@ -286,29 +371,41 @@ const generateSettlementReportHTML = (route, invoices) => {
     });
 
     const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight:bold;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
-    const facturasRows = invoices.map(inv => `<tr><td style="padding: 8px; border: 1px solid #ddd;">${inv.clienteNombre}</td><td style="padding: 8px; border: 1px solid #ddd;">${inv.estado}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.totalVenta)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoEfectivo || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoTransferencia || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: red;">${formatCurrency(inv.saldoPendiente)}</td></tr>`).join('');
+    const facturasRows = invoices.map(inv => `<tr><td style="padding: 8px; border: 1px solid #ddd;">${inv.clienteNombre}</td><td style="padding: 8px; border: 1px solid #ddd;">${inv.estado}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.totalVenta)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoEfectivo || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoTransferencia || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoQR || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoPoint || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: red;">${formatCurrency(inv.saldoPendiente)}</td></tr>`).join('');
 
-    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;} th, td{padding: 10px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #7f8c8d;} .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; font-weight: bold; }</style></head><body><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div></div><h3>1. DINERO A ENTREGAR (CAJA)</h3><div class="box"><table style="margin:0;"><tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td style="font-size: 14px;">TRANSFERENCIAS (Banco):</td><td class="amount" style="font-size: 18px;">${formatCurrency(resumen.transferencia)}</td></tr><tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL VENTA RUTA:</strong></td><td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr></table></div><h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}<h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efectivo</th><th class="amount">Transf.</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table><div style="margin-top: 60px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div></div></body></html>`;
+    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10px;} th, td{padding: 8px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #7f8c8d;} .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; font-weight: bold; }</style></head><body><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div></div><h3>1. DINERO A ENTREGAR (CAJA)</h3><div class="box"><table style="margin:0;"><tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td style="font-size: 14px;">TRANSFERENCIAS:</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.transferencia)}</td></tr><tr><td style="font-size: 14px;">MERCADO PAGO (QR):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.qr)}</td></tr><tr><td style="font-size: 14px;">POINT SMART (Tarjeta):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.point)}</td></tr><tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL VENTA RUTA:</strong></td><td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr></table></div><h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}<h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efvo.</th><th class="amount">Transf.</th><th class="amount">QR</th><th class="amount">Point</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table><div style="margin-top: 60px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div></div></body></html>`;
 };
 
 // --- HOOK DE DATOS ---
-function useFirestoreSubscription(firestoreQuery) {
+function useFirestoreSubscription(collectionName, orders = []) {
+    const { onTenantSnapshot, tenantId, getTenantDoc, getTenantCollection, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+
     useEffect(() => {
-        if (!firestoreQuery) { setData([]); setIsLoading(false); return; }
+        if (!tenantId) { 
+            setData([]); 
+            setIsLoading(false); 
+            return; 
+        }
         setIsLoading(true);
-        const unsubscribe = onSnapshot(firestoreQuery, (snapshot) => {
+        const unsubscribe = onTenantSnapshot(collectionName, (snapshot) => {
             const resolvedData = snapshot.docs.map(doc => ({
                 id: doc.id, ...doc.data(),
                 fecha: doc.data().fecha?.toDate(),
                 fechaCreacion: doc.data().fechaCreacion?.toDate(),
             }));
-            setData(resolvedData); setIsLoading(false);
-        }, (err) => { setError(err); setIsLoading(false); console.error(err); });
+            setData(resolvedData); 
+            setIsLoading(false);
+        }, orders, (err) => { 
+            setError(err); 
+            setIsLoading(false); 
+            console.error(err); 
+        });
         return () => unsubscribe();
-    }, [firestoreQuery]);
+    }, [tenantId, collectionName]);
+
     return { data, isLoading, error };
 }
 
@@ -468,20 +565,18 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
 function Rutas() {
     const [isPlannerOpen, setIsPlannerOpen] = useState(false);
     const [selectedRoute, setSelectedRoute] = useState(null);
+    const [isMapOpen, setIsMapOpen] = useState(false);
+    const [mapRoute, setMapRoute] = useState(null);
     const [activeTab, setActiveTab] = useState('planificacion');
     const [plannerReadOnly, setPlannerReadOnly] = useState(false);
+    const { tenantId, getTenantCollection, getTenantDoc, addTenantDoc, updateTenantDoc, deleteTenantDoc, db, onTenantSnapshot } = useFirestore();
+    const { companyConfig: config } = useTenant();
 
-    const routesQuery = useMemo(() => query(collection(db, 'rutas'), orderBy('fechaCreacion', 'desc')), []);
-    const invoicesQuery = useMemo(() => query(collection(db, 'ventas'), where('estado', '!=', 'Archivada')), []);
-    const vendorsQuery = useMemo(() => query(collection(db, 'vendedores')), []);
-    const clientesQuery = useMemo(() => query(collection(db, 'clientes')), []);
-    const zonasQuery = useMemo(() => query(collection(db, 'zonas')), []);
-    
-    const { data: routes, isLoading: routesLoading } = useFirestoreSubscription(routesQuery);
-    const { data: allInvoices, isLoading: invoicesLoading } = useFirestoreSubscription(invoicesQuery);
-    const { data: allVendors, isLoading: vendorsLoading } = useFirestoreSubscription(vendorsQuery);
-    const { data: clientes, isLoading: clientesLoading } = useFirestoreSubscription(clientesQuery);
-    const { data: zonas, isLoading: zonasLoading } = useFirestoreSubscription(zonasQuery);
+    const { data: routes, isLoading: routesLoading } = useFirestoreSubscription('rutas', [{ field: 'fechaCreacion', direction: 'desc' }]);
+    const { data: allInvoices, isLoading: invoicesLoading } = useFirestoreSubscription('ventas');
+    const { data: allVendors, isLoading: vendorsLoading } = useFirestoreSubscription('vendedores');
+    const { data: clientes, isLoading: clientesLoading } = useFirestoreSubscription('clientes');
+    const { data: zonas, isLoading: zonasLoading } = useFirestoreSubscription('zonas');
     
     // --- AQUÍ FUSIONAMOS LA INTELIGENCIA DEL CLIENTE CON LA FACTURA ---
     const enrichedInvoices = useMemo(() => {
@@ -497,15 +592,30 @@ function Rutas() {
                 
                 // DATOS CRÍTICOS PARA AFIP (Si la factura no los tiene, los sacamos del cliente)
                 // Esto asegura que la nube sepa qué hacer aunque la venta sea vieja
-                facturaAfip: invoice.facturaAfip ?? cliente?.requiereFacturaAfip ?? false,
+                facturaAfip: invoice.facturaAfip ?? cliente?.isArca ?? false,
                 clienteCondicionIVA: invoice.clienteCondicionIVA ?? cliente?.condicionIva ?? 'CF',
                 clienteCuit: invoice.clienteCuit ?? cliente?.numeroDocumento ?? '',
+                // --- AUTOMATIZACIÓN FISCAL ---
+                afipLetra: invoice.afipLetra || (config?.taxCondition === 'MT' ? 'C' : ((invoice.clienteCondicionIVA ?? cliente?.condicionIva) === 'RI' ? 'A' : 'B')),
+                companyInfo: config
             };
         });
     }, [allInvoices, clientes]);
 
     const pendingInvoices = useMemo(() => enrichedInvoices.filter(inv => inv.estado === 'Pendiente de Entrega'), [enrichedInvoices]);
-    const repartidoresOnly = useMemo(() => allVendors.filter(v => v.rango === 'Reparto' || v.rango === 'Administrador'), [allVendors]);
+    const repartidoresOnly = useMemo(() => {
+        const filtered = allVendors.filter(v => {
+            const roleStr = (v.rango || v.role || v.rol || '').toLowerCase().trim();
+            // Aceptamos 'reparto', 'repartidor', 'vendedor' (para mayor compatibilidad) o 'administrador'
+            return roleStr.includes('reparto') || roleStr.includes('vendedor') || roleStr === 'administrador';
+        });
+
+        if (allVendors.length > 0 && filtered.length === 0) {
+            console.warn("⚠️ Filtro de repartidores: Se encontraron usuarios, pero ninguno coincide con 'reparto', 'vendedor' o 'administrador'.", allVendors);
+        }
+
+        return filtered;
+    }, [allVendors]);
 
     const handleCreateNewRoute = async () => {
         const today = new Date();
@@ -513,12 +623,13 @@ function Rutas() {
         const existingRoutes = routes.filter(r => r.nombre && r.nombre.startsWith(`Ruta del ${dateString}`)).length;
         const newRouteName = `Ruta del ${dateString} (${existingRoutes + 1})`;
         const newRoute = {
+            companyId: tenantId, // Inyección de Multi-Tenancy
             nombre: newRouteName, fechaCreacion: Timestamp.now(), estado: 'Planificada',
             repartidorId: null, repartidorNombre: null, facturas: [],
             resumen: { totalFacturas: 0, totalACobrar: 0, paradas: 0 }
         };
         try {
-            const docRef = await addDoc(collection(db, 'rutas'), newRoute);
+            const docRef = await addTenantDoc('rutas', newRoute);
             setSelectedRoute({ id: docRef.id, ...newRoute });
             setPlannerReadOnly(false);
             setIsPlannerOpen(true);
@@ -529,21 +640,41 @@ function Rutas() {
     const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen) => {
         const repartidor = allVendors.find(r => r.id === repartidorId);
         
-        // 1. Identificar cuáles necesitan Factura AFIP y aún NO tienen CAE
+        // --- BLINDAJE FISCAL: PRE-VUELO ---
         const facturasAfipParaProcesar = facturas.filter(inv => inv.facturaAfip === true && !inv.afipCAE);
+        
+        if (facturasAfipParaProcesar.length > 0) {
+            if (!config?.cuit || !config?.taxCondition || !config?.ptoVta) {
+                toast.error("❌ ERROR FISCAL: Configuración AFIP incompleta. Cargue CUIT/IVA en Integraciones.");
+                return;
+            }
+        }
+
+        // 1. Identificar objetivos y ASEGURAR DATOS FRESCOS (REINYECCIÓN)
+        const facturasProcesablesEnriquecidas = facturasAfipParaProcesar.map(inv => {
+            const cliente = clientes.find(c => c.id === inv.clienteId);
+            const letra = (config?.taxCondition === 'MT') ? 'C' : ((inv.clienteCondicionIVA ?? cliente?.condicionIva) === 'RI' ? 'A' : 'B');
+            
+            return {
+                ...inv,
+                afipLetra: letra,
+                companyInfo: config // Inyección forzada de datos de empresa actuales
+            };
+        });
         
         // Clonamos para manipular los datos ANTES de imprimir (por si la BD tarda)
         let facturasParaImprimir = [...facturas];
 
         // 2. Si hay facturas pendientes de AFIP, llamamos a la nube
+        let mapaResultados = null;
         if (facturasAfipParaProcesar.length > 0) {
             try {
-                // Llamada a Google Cloud Functions
-                const result = await emitirFacturas({ ventas: facturasAfipParaProcesar });
+                // Llamada a Google Cloud Functions con datos ENRIQUECIDOS
+                const result = await emitirFacturas({ ventas: facturasProcesablesEnriquecidas });
                 const resultadosAfip = result.data; // Array de resultados
 
                 // 3. "Estampamos" los CAEs recibidos en el array de memoria para que salgan en el PDF YA
-                const mapaResultados = new Map(resultadosAfip.map(r => [r.ventaId, r]));
+                mapaResultados = new Map(resultadosAfip.map(r => [r.ventaId, r]));
 
                 facturasParaImprimir = facturasParaImprimir.map(inv => {
                     const res = mapaResultados.get(inv.id);
@@ -572,24 +703,46 @@ function Rutas() {
         const removedInvoices = originalInvoiceIds.filter(id => !newInvoiceIds.includes(id));
 
         await runTransaction(db, async (transaction) => {
-            const routeRef = doc(db, 'rutas', routeId);
+            const routeRef = getTenantDoc('rutas', routeId);
             const facturasRutaData = facturas.map(f => ({ 
-                id: f.id, clienteNombre: f.clienteNombre, clienteDireccion: f.clienteDireccion, 
-                totalVenta: f.totalVenta, estadoVisita: f.estadoVisita || 'Pendiente' 
+                id: f.id, 
+                clienteId: f.clienteId, // CRÍTICO: Necesario para auditoría GPS
+                clienteNombre: f.clienteNombre, 
+                clienteDireccion: f.clienteDireccion, 
+                totalVenta: f.totalVenta, 
+                estadoVisita: f.estadoVisita || 'Pendiente' 
             }));
 
+            // Usamos el UID de Firebase de forma prioritaria para la App Móvil
+            const finalRepartidorId = repartidor?.firebaseAuthUid || repartidorId;
+
             transaction.update(routeRef, {
-                estado: 'En Curso', repartidorId, repartidorNombre: repartidor?.nombreCompleto || 'N/A',
-                facturas: facturasRutaData, resumen
+                estado: 'En Curso', 
+                repartidorId: finalRepartidorId, 
+                repartidorNombre: repartidor?.nombreCompleto || 'N/A',
+                facturas: facturasRutaData, 
+                resumen
             });
 
             facturas.forEach(invoice => {
-                const invoiceRef = doc(db, 'ventas', invoice.id);
-                transaction.update(invoiceRef, { estado: 'Repartiendo', rutaId: routeId });
+                const invoiceRef = getTenantDoc('ventas', invoice.id);
+                const afipUpdate = mapaResultados?.get(invoice.id);
+                
+                let updateData = { estado: 'Repartiendo', rutaId: routeId };
+                
+                if (afipUpdate && afipUpdate.status === 'OK') {
+                    updateData.afipCAE = afipUpdate.detalle.cae;
+                    updateData.afipFechaVtoCAE = afipUpdate.detalle.vtoCAE;
+                    updateData.afipNumeroComprobante = afipUpdate.detalle.numero;
+                    updateData.afipLetra = afipUpdate.detalle.tipoLetra;
+                    updateData.facturaAfip = true;
+                }
+
+                transaction.update(invoiceRef, updateData);
             });
 
             removedInvoices.forEach(id => {
-                const invoiceRef = doc(db, 'ventas', id);
+                const invoiceRef = getTenantDoc('ventas', id);
                 transaction.update(invoiceRef, { estado: 'Pendiente de Entrega', rutaId: null });
             });
         });
@@ -601,15 +754,21 @@ function Rutas() {
         const loadingReportHtml = generateLoadingReportHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto);
         allPrintContent += `<div style="padding: 20px;">${loadingReportHtml}</div><div style="page-break-after: always;"></div>`;
         
-        // B. Facturas Individuales (Cliente)
-        for (const factura of facturasParaImprimir) {
-            const fullClient = clientes.find(c => c.id === factura.clienteId) || {};
-            const zonaNombre = fullClient.zonaId ? (zonas.find(z => z.id === fullClient.zonaId)?.nombre || 'N/A') : 'N/A';
-            
-            // Aquí se genera el HTML con el CAE si corresponde
-            const invoiceHtml = generateInvoiceHtmlContent(factura, fullClient, zonaNombre);
-            allPrintContent += `<div style="padding: 20px;">${invoiceHtml}</div><div style="page-break-after: always;"></div>`;
-        }
+        // B. Listado de Ruta (Clientes a visitar y Cobranzas)
+        const routeListHtml = generateRouteListHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto);
+        allPrintContent += `<div style="padding: 20px;">${routeListHtml}</div><div style="page-break-after: always;"></div>`;
+        
+        // C. Facturas Individuales (Cliente)
+        const printPromises = facturasParaImprimir.map(async (fac) => {
+            const client = clientes.find(c => c.id === fac.clienteId) || {};
+            const zona = zonas.find(z => z.id === fac.zonaId) || { nombre: 'General' };
+            return generateInvoiceHtmlContent(fac, client, zona.nombre, config);
+        });
+        
+        const invoicesHtmls = await Promise.all(printPromises);
+        invoicesHtmls.forEach(html => {
+            allPrintContent += `<div style="padding: 20px;">${html}</div><div style="page-break-after: always;"></div>`;
+        });
         
         printHTML(`<html><body>${allPrintContent}</body></html>`);
     };
@@ -618,10 +777,10 @@ function Rutas() {
         if (!window.confirm(`¿ATENCIÓN: Anular y ELIMINAR la ruta "${routeToCancel.nombre}"?\n\nLas facturas volverán a estado 'Pendiente de Entrega' y la ruta desaparecerá.`)) return;
         try {
             await runTransaction(db, async (transaction) => {
-                const routeRef = doc(db, 'rutas', routeToCancel.id);
+                const routeRef = getTenantDoc('rutas', routeToCancel.id);
                 
                 // PASO 1: LECTURAS (Promise.all para optimizar)
-                const invoiceRefs = (routeToCancel.facturas || []).map(f => doc(db, 'ventas', f.id));
+                const invoiceRefs = (routeToCancel.facturas || []).map(f => getTenantDoc('ventas', f.id));
                 const invoiceSnaps = await Promise.all(invoiceRefs.map(ref => transaction.get(ref)));
 
                 // PASO 2: ESCRITURAS
@@ -639,6 +798,7 @@ function Rutas() {
 
     const handleViewRoute = (route) => { setSelectedRoute(route); setPlannerReadOnly(true); setIsPlannerOpen(true); };
     const handleEditInProgress = (route) => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); };
+    const handleOpenMap = (route) => { setMapRoute(route); setIsMapOpen(true); };
 
     if (routesLoading || invoicesLoading || vendorsLoading || clientesLoading || zonasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
@@ -674,7 +834,7 @@ function Rutas() {
                 {activeTab === 'planificacion' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {planificadas.map(route => (
-                            <RouteCard key={route.id} route={route} onOpenPlanner={() => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); }} allInvoices={enrichedInvoices} />
+                            <RouteCard key={route.id} route={route} onOpenPlanner={() => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); }} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} onOpenMap={() => handleOpenMap(route)} />
                         ))}
                         {planificadas.length === 0 && <EmptyState message="No hay rutas pendientes de planificación." />}
                     </div>
@@ -683,7 +843,7 @@ function Rutas() {
                 {activeTab === 'en_curso' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {enCurso.map(route => (
-                            <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} onEdit={() => handleEditInProgress(route)} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} readOnly={false} />
+                            <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} onEdit={() => handleEditInProgress(route)} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} readOnly={false} onOpenMap={() => handleOpenMap(route)} />
                         ))}
                         {enCurso.length === 0 && <EmptyState message="No hay camiones en la calle ahora mismo." />}
                     </div>
@@ -704,6 +864,15 @@ function Rutas() {
                     route={selectedRoute} onClose={() => { setIsPlannerOpen(false); setSelectedRoute(null); }} 
                     allPendingInvoices={pendingInvoices} repartidores={repartidoresOnly} zonas={zonas} vendors={allVendors}
                     onDispatch={handleDispatchRoute} isReadOnly={plannerReadOnly}
+                />
+            )}
+
+            {isMapOpen && mapRoute && (
+                <RouteMapMonitor 
+                    isOpen={isMapOpen} 
+                    onClose={() => { setIsMapOpen(false); setMapRoute(null); }} 
+                    route={mapRoute} 
+                    clientes={clientes}
                 />
             )}
         </div>
@@ -727,7 +896,8 @@ const EmptyState = ({ message }) => (
     </div>
 );
 
-const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCancel }) => {
+const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCancel, onOpenMap }) => {
+    const { MapPin } = { MapPin: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> };
     const { estado, nombre, repartidorNombre, facturas } = route;
     const liveStats = useMemo(() => {
         const routeInvoiceIds = (facturas || []).map(f => f.id);
@@ -755,7 +925,17 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                     <span className={`w-1.5 h-1.5 rounded-full ${status.dot} animate-pulse`}></span> {estado}
                 </span>
                 {estado === 'Planificada' && !readOnly && (
-                    <button onClick={onOpenPlanner} className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"><EditIcon/></button>
+                    <div className="flex gap-2">
+                        <button onClick={onOpenMap} title="Auditoría GPS" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-orange-50 text-gray-400 hover:text-orange-600 transition-colors"><MapPin className="w-4 h-4"/></button>
+                        <button onClick={onOpenPlanner} title="Gestionar" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"><EditIcon className="w-4 h-4"/></button>
+                        <button onClick={onCancel} title="Eliminar Planificación" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><TrashIcon className="w-4 h-4"/></button>
+                    </div>
+                )}
+                {estado === 'En Curso' && (
+                    <div className="flex gap-2">
+                        <button onClick={onOpenMap} title="Auditoría GPS" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-orange-50 text-gray-400 hover:text-orange-600 transition-colors"><MapPin className="w-4 h-4"/></button>
+                        <button onClick={onEdit} title="Editar Ruta" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"><EditIcon className="w-4 h-4"/></button>
+                    </div>
                 )}
             </div>
             <div className="relative z-10">
@@ -793,17 +973,24 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
     const [expandedRouteId, setExpandedRouteId] = useState(null);
     const handleArchiveRoute = async (route) => {
         if (!window.confirm(`¿Confirmar cierre de ruta "${route.nombre}"?\n\nSe archivará la ruta y se liberará al repartidor.`)) return;
-        try { await updateDoc(doc(db, 'rutas', route.id), { estado: 'Archivada', fechaCierre: Timestamp.now() }); alert("Ruta cerrada y archivada."); } catch (e) { console.error(e); alert("Error al cerrar."); }
+        try { await updateTenantDoc('rutas', route.id, { estado: 'Archivada', fechaCierre: Timestamp.now() }); alert("Ruta cerrada y archivada."); } catch (e) { console.error(e); alert("Error al cerrar."); }
     };
     const handleDeleteArchivedRoute = async (routeId) => {
         if(!window.confirm("¿Eliminar este registro del historial? Esta acción es irreversible.")) return;
-        try { await deleteDoc(doc(db, 'rutas', routeId)); } catch(e) { console.error(e); alert("Error al eliminar."); }
+        try { await deleteTenantDoc('rutas', routeId); } catch(e) { console.error(e); alert("Error al eliminar."); }
     }
     return (
         <div className="space-y-4 animate-fade-in">
             {routes.map(route => {
                 const routeInvoices = allInvoices.filter(i => (route.facturas || []).some(f => f.id === i.id));
-                const totals = routeInvoices.reduce((acc, i) => ({ efectivo: acc.efectivo + (i.pagoEfectivo || 0), transferencia: acc.transferencia + (i.pagoTransferencia || 0), pendiente: acc.pendiente + (i.saldoPendiente || 0), total: acc.total + (i.totalVenta || 0) }), { efectivo: 0, transferencia: 0, pendiente: 0, total: 0 });
+                const totals = routeInvoices.reduce((acc, i) => ({ 
+                    efectivo: acc.efectivo + (i.pagoEfectivo || 0), 
+                    transferencia: acc.transferencia + (i.pagoTransferencia || 0), 
+                    qr: acc.qr + (i.pagoQR || 0),
+                    point: acc.point + (i.pagoPoint || 0),
+                    pendiente: acc.pendiente + (i.saldoPendiente || 0), 
+                    total: acc.total + (i.totalVenta || 0) 
+                }), { efectivo: 0, transferencia: 0, qr: 0, point: 0, pendiente: 0, total: 0 });
                 const isExpanded = expandedRouteId === route.id;
                 const isArchived = route.estado === 'Archivada';
                 return (
@@ -814,7 +1001,7 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                                 <div><h3 className="text-lg font-bold text-gray-900">{route.nombre}</h3><p className="text-sm text-gray-500 font-medium">{route.repartidorNombre} {isArchived && <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">FINALIZADA</span>}</p></div>
                             </div>
                             <div className="flex items-center gap-8">
-                                <div className="text-right hidden md:block"><span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (Total)'}</span><span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia)}</span></div>
+                                <div className="text-right hidden md:block"><span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (E+T+QR+P)'}</span><span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia + totals.qr + totals.point)}</span></div>
                                 <button className={`w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-gray-200' : ''}`}><ChevronDownIcon className="w-5 h-5 text-gray-600"/></button>
                             </div>
                         </div>

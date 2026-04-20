@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // Importamos 'app' además de 'db'
 import { db, app, auth } from '../firebase.js'; 
-import { collection, onSnapshot, orderBy, query, getDocs, doc, runTransaction, Timestamp, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, getDocs, doc, runTransaction, Timestamp, updateDoc, increment, addDoc, deleteDoc, where } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
+import { useShift } from '../contexts/ShiftContext';
+import { useTenant } from '../contexts/TenantContext';
+
 // Importamos las funciones de la Nube
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 
@@ -68,14 +72,24 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
     const numCompStr = String(venta.afipNumeroComprobante || venta.id.substring(0, 8)).padStart(8, '0');
     
+    // Datos de la empresa desde config (snapshot guardado o global actual)
+    const co = venta.companyInfo || {};
+    const logoUrl = co.logo || '';
+    const companyName = co.nombreFantasia || co.name || 'DISTRIBUIDORA';
+    const companyAddress = co.domicilioFiscal || 'Argentina';
+    const taxType = co.taxCondition === 'RI' ? 'Responsable Inscripto' : (co.taxCondition === 'MT' ? 'Monotributista' : 'Contribuyente');
+    const companyCuit = co.cuit || 'S/D';
+    const ptoVtaStr = String(co.ptoVta || '1').padStart(5, '0');
+    
     // Generación QR (Solo si tiene CAE)
     let qrHtml = '';
     if (tieneCAE) {
+        const cleanCuit = String(companyCuit).replace(/-/g, '');
         const datosQr = {
             ver: 1,
             fecha: fechaImpresion.toISOString().split('T')[0],
-            cuit: 27278612932, // TU CUIT
-            ptoVta: 5,
+            cuit: parseInt(cleanCuit) || 0,
+            ptoVta: parseInt(co.ptoVta) || 1,
             tipoCmp: letra === 'A' ? 1 : (letra === 'B' ? 6 : 11),
             nroCmp: parseInt(venta.afipNumeroComprobante || 0),
             importe: parseFloat(venta.totalVenta),
@@ -89,10 +103,11 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
         const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(urlAfip)}`;
         
         qrHtml = `
-            <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
                 <img src="${qrImgUrl}" alt="QR AFIP" style="width: 80px; height: 80px; border: 1px solid #ddd;" />
                 <div style="font-size: 10px; font-weight: bold;">
-                    <span style="font-style: italic;">CAE: ${venta.afipCAE}</span><br>
+                    <span style="font-style: italic; color: #666;">Comprobante autorizado por AFIP</span><br>
+                    <span style="font-size: 11px;">CAE: ${venta.afipCAE}</span><br>
                     <span>Vto. CAE: ${venta.afipFechaVtoCAE || ''}</span>
                 </div>
             </div>
@@ -100,11 +115,11 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
     }
 
     const itemsHtml = (venta.items || []).map(item => `
-        <tr style="border-bottom: 1px solid #ccc;">
-            <td style="padding: 5px;">${item.nombre}</td>
-            <td style="text-align: center; padding: 5px;">${item.quantity}</td>
-            <td style="text-align: right; padding: 5px;">${formatCurrency(item.precio)}</td>
-            <td style="text-align: right; padding: 5px;">${formatCurrency(item.quantity * item.precio)}</td>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 8px 5px; font-size: 11px;">${item.nombre}</td>
+            <td style="text-align: center; padding: 8px 5px; font-size: 11px;">${item.quantity}</td>
+            <td style="text-align: right; padding: 8px 5px; font-size: 11px;">${formatCurrency(item.precio)}</td>
+            <td style="text-align: right; padding: 8px 5px; font-size: 11px; font-weight: bold;">${formatCurrency(item.quantity * item.precio)}</td>
         </tr>
     `).join('');
 
@@ -114,32 +129,36 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
         <head>
             <title>${tituloComprobante} #${numCompStr}</title>
             <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; font-size: 12px; color: #333; }
-                .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,.15); border-radius: 8px; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; font-size: 12px; color: #333; line-height: 1.4; }
+                .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; border-radius: 8px; }
                 
                 /* HEADER STYLES */
-                .header { display: flex; justify-content: space-between; border-bottom: 2px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
+                .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
                 .company-info { width: 50%; }
                 
-                /* LOGO NOAR ERP INTEGRADO */
-                .logo-container { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-                .logo-icon { width: 30px; height: 30px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 18px; font-family: Arial, sans-serif; }
-                .logo-text { font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px; font-family: Arial, sans-serif; }
+                /* DINAMIC BRANDING */
+                .logo-container { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+                .logo-img { max-height: 60px; max-width: 200px; object-fit: contain; }
+                .logo-placeholder { width: 50px; height: 50px; background-color: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 24px; }
+                .company-name-text { font-size: 20px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: -0.5px; }
                 
-                .letter-box { width: 50px; height: 50px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; background: #f9f9f9; }
+                .letter-box { width: 50px; height: 55px; border: 2px solid #333; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; margin-bottom: 5px; }
+                .letter { font-size: 32px; font-weight: 900; line-height: 1; }
+                .letter-code { font-size: 9px; font-weight: bold; }
+                
                 .invoice-data { text-align: right; width: 40%; }
+                .client-info { background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
                 
-                .client-info { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #3498db; }
-                
-                table { width: 100%; border-collapse: collapse; }
-                th { background: #e9ecef; text-transform: uppercase; font-size: 11px; padding: 10px; text-align: left; }
-                td { padding: 10px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                th { background: #f1f5f9; text-transform: uppercase; font-size: 10px; font-weight: 800; padding: 12px 8px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+                td { padding: 10px 8px; }
                 
                 .text-right { text-align: right; }
                 .text-center { text-align: center; }
-                .total-row td { border-top: 2px solid #333; font-weight: bold; font-size: 14px; padding-top: 10px; }
+                .total-row td { border-top: 2px solid #333; font-weight: 900; font-size: 16px; padding-top: 15px; }
                 
-                .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px; }
+                .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+                .legal-notice { font-size: 8px; text-transform: uppercase; font-weight: bold; color: #64748b; margin-top: 5px; }
             </style>
         </head>
         <body>
@@ -147,43 +166,62 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                 <div class="header">
                     <div class="company-info">
                         <div class="logo-container">
-                            <div class="logo-icon">N</div>
-                            <div class="logo-text">NOAR <span style="color: #d97706; font-weight: 300; letter-spacing: 2px; font-size: 14px;">ERP</span></div>
+                            ${logoUrl ? `<img src="${logoUrl}" class="logo-img" />` : `
+                                <div class="logo-placeholder">${(companyName || 'D')[0]}</div>
+                                <div class="company-name-text">${companyName}</div>
+                            `}
                         </div>
-                        <p style="margin: 0; font-size: 10px; color: #666;">
-                            <strong>Distribuidora La Llave</strong><br>
-                            Razón Social: Tu Nombre<br>
-                            Dirección: Dirección Real, La Rioja<br>
-                            Condición IVA: Monotributo
+                        <p style="margin: 0; font-size: 11px; font-weight: 500;">
+                            <strong>${co.name || companyName}</strong><br>
+                            ${companyAddress}<br>
+                            Condición IVA: ${taxType}<br>
+                            ${co.iibb ? `Ingresos Brutos: ${co.iibb}<br>` : ''}
+                            ${co.inicioActividades ? `Inicio de Actividades: ${co.inicioActividades}` : ''}
                         </p>
                     </div>
                     
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-                        <div class="letter-box">${letra}</div>
-                        <span style="font-size: 9px; margin-top: 5px;">${codComprobante}</span>
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-right: 20px;">
+                        <div class="letter-box">
+                            <div class="letter">${letra}</div>
+                            <div class="letter-code">${codComprobante}</div>
+                        </div>
+                        ${!tieneCAE ? '<div class="legal-notice">No válido como factura</div>' : ''}
                     </div>
 
                     <div class="invoice-data">
-                        <h2 style="margin: 0; color: #333;">${tituloComprobante}</h2>
-                        <p style="font-size: 11px; line-height: 1.5;">
-                            <strong>Nº:</strong> 00005-${numCompStr}<br>
-                            <strong>Fecha:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                            <strong>CUIT:</strong> 27-27861293-2
+                        <h2 style="margin: 0 0 10px 0; color: #1e293b; font-size: 24px; font-weight: 900;">${tituloComprobante}</h2>
+                        <p style="font-size: 12px; line-height: 1.6; font-weight: 600;">
+                            <span style="color: #64748b;">Número:</span> ${ptoVtaStr}-${numCompStr}<br>
+                            <span style="color: #64748b;">Fecha:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                            <span style="color: #64748b;">CUIT:</span> ${companyCuit}
                         </p>
                     </div>
                 </div>
 
                 <div class="client-info">
-                    <strong>Cliente:</strong> ${venta.clienteNombre || 'Consumidor Final'}<br>
-                    <strong>CUIT/DNI:</strong> ${venta.clienteCuit || clientDetails.cuit || clientDetails.dni || 'S/D'}<br>
-                    <strong>Dirección:</strong> ${clientDetails.direccion || 'N/A'} (${zonaNombre})<br>
-                    <strong>Condición IVA:</strong> ${venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : 'Consumidor Final'}
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 2px;">Cliente</span>
+                            <strong style="font-size: 14px;">${venta.clienteNombre || 'Consumidor Final'}</strong>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 2px;">CUIT / DNI</span>
+                            <strong>${venta.clienteCuit || clientDetails.cuit || clientDetails.dni || 'S/D'}</strong>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+                        <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Dirección:</span> 
+                        <span style="font-size: 11px; font-weight: 600;">${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
+                        <span style="margin: 0 10px; color: #cbd5e1;">|</span>
+                        <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Cond. IVA:</span> 
+                        <span style="font-size: 11px; font-weight: 600;">${venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : 'Consumidor Final'}</span>
+                    </div>
                 </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th width="50%">Producto</th>
+                            <th width="50%">Descripción del Producto</th>
                             <th width="10%" class="text-center">Cant.</th>
                             <th width="20%" class="text-right">Precio Unit.</th>
                             <th width="20%" class="text-right">Subtotal</th>
@@ -194,7 +232,7 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                     </tbody>
                     <tfoot>
                         <tr class="total-row">
-                            <td colspan="3" class="text-right">TOTAL</td>
+                            <td colspan="3" class="text-right">TOTAL A PAGAR</td>
                             <td class="text-right">${formatCurrency(venta.totalVenta)}</td>
                         </tr>
                     </tfoot>
@@ -203,7 +241,7 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                 ${qrHtml}
 
                 <div class="footer">
-                    Documento generado por <strong>Noar ERP</strong>.
+                    Gracias por su confianza. Este documento es un comprobante de operación.
                 </div>
             </div>
         </body>
@@ -302,6 +340,8 @@ const CollectSaleModal = ({ total, onConfirm, onClose }) => {
 };
 
 function Facturacion() {
+    const { activeShift } = useShift();
+    const { companyConfig, logo: globalLogo } = useTenant();
     const [ventas, setVentas] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -323,10 +363,15 @@ function Facturacion() {
     });
     
     const [error, setError] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(''); // Para búsqueda de ventas
+    const [clientSearchTerm, setClientSearchTerm] = useState(''); // Para búsqueda de clientes en modal
+    const [processingWebOrderId, setProcessingWebOrderId] = useState(null);
+    const [matchedClient, setMatchedClient] = useState(null);
     const [filterStatus, setFilterStatus] = useState('Todos');
-    const [isSaving, setIsSaving] = useState(false); 
-    
+    const [isSaving, setIsSaving] = useState(false);
+    const [confirmClientChange, setConfirmClientChange] = useState(null); // null | clientId string
+    const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+
     // Modal selección producto
     const [productForQuantity, setProductForQuantity] = useState(null);
     const [quantityToAdd, setQuantityToAdd] = useState(1);
@@ -334,12 +379,15 @@ function Facturacion() {
     
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
-    const [filterDate, setFilterDate] = useState('');
-    const [clientSearchTerm, setClientSearchTerm] = useState(''); 
+    const [filterDate, setFilterDate] = useState(''); 
+
+    const { onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc, tenantId, getTenantCollection, getTenantDoc, db } = useFirestore();
 
     useEffect(() => {
-        const q = query(collection(db, 'ventas'), orderBy('fecha', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!tenantId) return;
+
+        // Carga de ventas filtrada por Tenant
+        const unsubscribe = onTenantSnapshot('ventas', (snapshot) => {
             const docs = snapshot.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data(), 
@@ -352,13 +400,18 @@ function Facturacion() {
             });
 
             setVentas(cleanDocs);
-        }, (err) => { console.error("Error ventas:", err); toast.error("Error al cargar ventas."); });
+        }, [{ field: 'fecha', direction: 'desc' }]);
 
         const fetchInitialData = async () => {
             try {
+                // Usamos getTenantCollection para filtrar por compañía
                 const [productsSnap, vendorsSnap, categoriesSnap, clientsSnap, zonasSnap, listsSnap] = await Promise.all([
-                    getDocs(collection(db, 'productos')), getDocs(collection(db, 'vendedores')),
-                    getDocs(collection(db, 'categorias')), getDocs(collection(db, 'clientes')), getDocs(collection(db, 'zonas')), getDocs(collection(db, 'listas_precios'))
+                    getDocs(getTenantCollection('productos')), 
+                    getDocs(getTenantCollection('vendedores')),
+                    getDocs(getTenantCollection('categorias')), 
+                    getDocs(getTenantCollection('clientes')), 
+                    getDocs(getTenantCollection('zonas')), 
+                    getDocs(getTenantCollection('listas_precios'))
                 ]);
                 setProductos(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setVendedores(vendorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -366,11 +419,14 @@ function Facturacion() {
                 setClientes(clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setZonas(zonasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setPriceLists(listsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            } catch (err) { setError("Error cargando datos maestros."); }
+            } catch (err) { 
+                console.error("Error data loading:", err);
+                setError("Error cargando datos maestros."); 
+            }
         };
         fetchInitialData();
         return () => unsubscribe();
-    }, []);
+    }, [tenantId]);
     
     const filteredClients = useMemo(() => {
         if (!clientSearchTerm) return clientes;
@@ -449,12 +505,44 @@ function Facturacion() {
                 productId: product.id, 
                 nombre: product.nombre, 
                 precio: finalPrice, 
-                costo: product.costo, 
+                costo: product.costo || 0, 
                 quantity: numQuantity,
                 comision: totalComisionLinea, 
                 _metaComisionPorcentaje: porcentajeComision 
             }] }));
         }
+    };
+
+    const handleProcessWebOrder = (webVenta) => {
+        resetForm();
+        setProcessingWebOrderId(webVenta.id);
+        
+        // Intentar matchear cliente por nombre
+        const bestMatch = clientes.find(c => 
+            (c.nombre && c.nombre.toLowerCase() === (webVenta.clienteNombre || '').toLowerCase()) ||
+            (c.telefono && webVenta.items[0]?.telefono === c.telefono) // Opción futura
+        );
+        
+        setMatchedClient(bestMatch || null);
+
+        setNewInvoice({
+            clienteId: bestMatch ? bestMatch.id : '',
+            clienteNombre: webVenta.clienteNombre || 'Cliente Web',
+            items: webVenta.items.map(item => ({
+                productId: item.id,
+                nombre: item.nombre,
+                precio: item.precio, // RESPETAMOS PRECIO CONGELADO
+                costo: productos.find(p => p.id === item.id)?.costo || 0,
+                quantity: item.quantity,
+                comision: 0 // Se recalculará o dejará en 0 según lógica de web
+            })),
+            observaciones: `PEDIDO WEB #${webVenta.id.substring(0,6)}. ${webVenta.observaciones || ''}`,
+            listaPreciosId: webVenta.listaPrecios || '',
+            facturaAfip: bestMatch ? bestMatch.isArca : false
+        });
+        
+        setIsModalOpen(true);
+        toast.info("Resumen de pedido web cargado. Vincula el cliente para finalizar.");
     };
     
     const handleRemoveItemFromCart = (productId) => {
@@ -483,40 +571,40 @@ function Facturacion() {
     };
 
     const calculateTotal = () => newInvoice.items.reduce((total, item) => total + ((item.precio || 0) * (item.quantity || 0)), 0);
-    const resetForm = () => { setNewInvoice({ clienteId: '', items: [], observaciones: '', listaPreciosId: '', facturaAfip: false }); setError(''); setProductSearch(''); setClientSearchTerm(''); };
+    const resetForm = () => { setNewInvoice({ clienteId: '', items: [], observaciones: '', listaPreciosId: '', facturaAfip: false }); setError(''); setProductSearch(''); setClientSearchTerm(''); setClientDropdownOpen(false); };
     const handleOpenModalForCreate = () => { resetForm(); setIsModalOpen(true); };
-    
-    const handleClientChange = (e) => {
-        const clientId = e.target.value;
-        
-        // ✅ CORRECCIÓN CRÍTICA: Si elige vacío (Consumidor Final), limpiamos todo
+
+    const _applyClientChange = (clientId) => {
         if (!clientId) {
-            setNewInvoice(prev => ({ 
-                ...prev, 
-                clienteId: '', 
-                clienteNombre: 'Consumidor Final', 
-                listaPreciosId: '',
-                facturaAfip: false, // Resetear AFIP por seguridad
-                items: [] 
-            }));
+            setNewInvoice(prev => ({ ...prev, clienteId: '', clienteNombre: 'Consumidor Final', listaPreciosId: '', facturaAfip: false, items: [] }));
+            setClientSearchTerm('');
+            setClientDropdownOpen(false);
             return;
         }
-
         const client = clientes.find(c => c.id === clientId);
         if (!client) return;
-
         const listaAsignada = client.listaPreciosAsignada || '';
+        setNewInvoice(prev => ({ ...prev, clienteId: client.id, clienteNombre: client.nombre || client.nombreCompleto || 'Cliente Sin Nombre', listaPreciosId: listaAsignada, facturaAfip: client.isArca || false, items: [] }));
+        if (listaAsignada) toast.info(`Lista de precios "${listaAsignada}" aplicada.`);
+        setClientSearchTerm('');
+        setClientDropdownOpen(false);
+    };
 
-        setNewInvoice(prev => ({ 
-            ...prev, 
-            clienteId: client.id, 
-            clienteNombre: client.nombre || client.nombreCompleto || 'Cliente Sin Nombre', 
-            listaPreciosId: listaAsignada,
-            // Si el cliente tiene flag de factura, lo activamos por defecto
-            facturaAfip: client.requiereFacturaAfip || false, 
-            items: [] 
-        }));
-        if(listaAsignada) toast.info(`Lista de precios "${listaAsignada}" aplicada.`);
+    const handleClientChange = (clientId) => {
+        if (newInvoice.items.length > 0) {
+            setConfirmClientChange(clientId);
+            return;
+        }
+        _applyClientChange(clientId);
+    };
+
+    const handleUpdateEstado = async (ventaId, nuevoEstado) => {
+        try {
+            await updateTenantDoc('ventas', ventaId, { estado: nuevoEstado });
+            toast.success(`Estado → "${nuevoEstado}"`);
+        } catch (err) {
+            toast.error('Error al actualizar estado');
+        }
     };
 
     // --- GUARDADO Y FACTURACIÓN ---
@@ -547,6 +635,7 @@ function Facturacion() {
             tipo: 'venta', 
             vendedorId: currentVendor.id, // Asignación automática
             vendedorNombre: currentVendor.nombreCompleto, // Asignación automática
+            shiftId: activeShift?.id || 'manual', // Vínculo crítico de auditoría
             fecha: Timestamp.now(),
             totalVenta,
             estado: 'Adeuda', 
@@ -585,16 +674,23 @@ function Facturacion() {
             finalSaleData.nroCupon = nroCupon || ''; 
             
             finalSaleData.saldoPendiente = totalVenta - totalPagado;
-            finalSaleData.estado = finalSaleData.saldoPendiente > 0.01 ? 'Adeuda' : 'Pagada';
+            finalSaleData.estado = finalSaleData.saldoPendiente > 0.01 
+                ? (processingWebOrderId ? 'Pendiente de Entrega' : 'Adeuda') 
+                : 'Pagada';
             finalSaleData.paymentMethod = finalSaleData.saldoPendiente <= 0.01 ? 'contado' : 'cuenta_corriente'; 
+        } else {
+             // Si no hay datos de pago, y es web, va a pendiente de entrega
+             if (processingWebOrderId) {
+                 finalSaleData.estado = 'Pendiente de Entrega';
+             }
         }
     
-        const newSaleRef = doc(collection(db, "ventas"));
         try {
             // 1. Guardar en Firestore primero
+            const newSaleRef = doc(getTenantCollection('ventas'));
             await runTransaction(db, async (transaction) => {
                 const productReads = finalSaleData.items.map(item => {
-                    const productRef = doc(db, 'productos', item.productId);
+                    const productRef = getTenantDoc('productos', item.productId);
                     return transaction.get(productRef);
                 });
                 const productDocs = await Promise.all(productReads);
@@ -607,10 +703,16 @@ function Facturacion() {
                     }
                 }
                 finalSaleData.items.forEach(item => {
-                    const productRef = doc(db, 'productos', item.productId);
+                    const productRef = getTenantDoc('productos', item.productId);
                     transaction.update(productRef, { stock: increment(-item.quantity) });
                 });
-                transaction.set(newSaleRef, finalSaleData);
+
+                // Si venía de un pedido web, borramos el original o lo marcamos
+                if (processingWebOrderId) {
+                     transaction.delete(getTenantDoc('pedidos_temporales', processingWebOrderId));
+                }
+
+                transaction.set(newSaleRef, { ...finalSaleData, companyId: tenantId });
             });
 
             // 2. Si requiere factura AFIP, llamar a la Cloud Function
@@ -633,11 +735,12 @@ function Facturacion() {
                         };
                     } else {
                         toast.error(`Error AFIP: ${resultadoAfip.detalle}`);
-                        // No bloqueamos, se guardó pero sin CAE
+                        await updateTenantDoc('ventas', newSaleRef.id, { afipPendiente: true, afipError: String(resultadoAfip.detalle) });
                     }
                 } catch (afipError) {
                     console.error(afipError);
                     toast.error("Error de comunicación con AFIP. La venta se guardó como pendiente.");
+                    await updateTenantDoc('ventas', newSaleRef.id, { afipPendiente: true, afipError: afipError.message });
                 }
             } else {
                 toast.success("Venta guardada correctamente.");
@@ -646,7 +749,20 @@ function Facturacion() {
             // 3. Imprimir PDF
             const clientDetails = clientes.find(c => c.id === finalSaleData.clienteId) || {};
             const zonaNombre = getZonaNombre(clientDetails.zonaId);
-            printInvoicePDF(saleForPDF, clientDetails, zonaNombre);
+            
+            // Inyectamos la info de empresa para el PDF (Snapshot) con MERGE DEFENSIVO
+            const saleWithInfo = { 
+                ...saleForPDF, 
+                companyInfo: { 
+                    logo: globalLogo || companyConfig?.logo, 
+                    nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name, 
+                    domicilioFiscal: companyConfig?.domicilioFiscal,
+                    taxCondition: companyConfig?.taxCondition,
+                    cuit: companyConfig?.cuit
+                } 
+            };
+            
+            printInvoicePDF(saleWithInfo, clientDetails, zonaNombre);
     
             setIsModalOpen(false);
             setIsCollectModalOpen(false);
@@ -667,10 +783,10 @@ function Facturacion() {
         try {
             await runTransaction(db, async (transaction) => {
                 for (const item of (venta.items || []).filter(i => i.productId)) { 
-                    const productRef = doc(db, 'productos', item.productId);
+                    const productRef = getTenantDoc('productos', item.productId);
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
-                transaction.delete(doc(db, 'ventas', venta.id));
+                transaction.delete(getTenantDoc('ventas', venta.id));
             });
             toast.success('Factura anulada y stock repuesto.');
         } catch (err) { 
@@ -683,7 +799,8 @@ function Facturacion() {
         if (!window.confirm("⚠️ PELIGRO: ¿Estás seguro de BORRAR TODAS las facturas? Esto restaurará el stock de cada venta y reiniciará las métricas. Esta acción no se puede deshacer.")) return;
         
         try {
-            const salesSnapshot = await getDocs(collection(db, 'ventas'));
+            // ✅ CORRECCIÓN CRITICA: Filtrado por Tenant
+            const salesSnapshot = await getDocs(getTenantCollection('ventas'));
             const sales = salesSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
             
             if (sales.length === 0) {
@@ -698,11 +815,11 @@ function Facturacion() {
                 await runTransaction(db, async (transaction) => {
                     // Reponer stock
                     for (const item of (sale.items || []).filter(i => i.productId)) { 
-                        const productRef = doc(db, 'productos', item.productId);
+                        const productRef = getTenantDoc('productos', item.productId);
                         transaction.update(productRef, { stock: increment(item.quantity) });
                     }
                     // Borrar venta
-                    transaction.delete(doc(db, 'ventas', sale.id));
+                    transaction.delete(getTenantDoc('ventas', sale.id));
                 });
                 count++;
             }
@@ -720,13 +837,42 @@ function Facturacion() {
         const zonaNombre = getZonaNombre(venta.clienteZonaId || clientDetails.zonaId);
         const robustClienteNombre = venta.clienteNombre || clientDetails.nombre || clientDetails.nombreCompleto || 'Consumidor Final';
         const robustVendedorNombre = venta.vendedorNombre || vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto || 'N/A';
-        const saleToPrint = { ...venta, clienteNombre: robustClienteNombre, vendedorNombre: robustVendedorNombre };
+        
+        // Inyectamos la info de empresa para el PDF (Snapshot) en reimpresión
+        const saleToPrint = { 
+            ...venta, 
+            clienteNombre: robustClienteNombre, 
+            vendedorNombre: robustVendedorNombre,
+            companyInfo: { 
+                logo: globalLogo || companyConfig?.logo || (venta.companyInfo?.logo), 
+                nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name || venta.companyInfo?.nombreFantasia, 
+                domicilioFiscal: companyConfig?.domicilioFiscal || venta.companyInfo?.domicilioFiscal,
+                taxCondition: companyConfig?.taxCondition || venta.companyInfo?.taxCondition,
+                cuit: companyConfig?.cuit || venta.companyInfo?.cuit
+            }
+        };
         printInvoicePDF(saleToPrint, clientDetails, zonaNombre);
     };
 
     // --- RENDERIZADO UI PREMIUM ---
     return (
-        <div className="min-h-screen bg-slate-50 p-6 font-sans animate-fade-in">
+        <div className="relative min-h-screen bg-slate-50 p-6 font-sans animate-fade-in">
+            {/* OVERLAY DE CAJA CERRADA (Blindaje Enterprise) */}
+            {!activeShift && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-100/40 backdrop-blur-md animate-fade-in p-6 text-center">
+                    <div className="w-24 h-24 bg-white rounded-[2.5rem] shadow-2xl flex items-center justify-center mb-8 border border-slate-200">
+                        <DollarSignIcon className="w-12 h-12 text-slate-300" />
+                    </div>
+                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter mb-4 uppercase">Caja Cerrada</h3>
+                    <p className="text-lg font-bold text-slate-500 max-w-sm leading-tight mb-8 uppercase tracking-widest">
+                        Debes abrir tu turno desde el Dashboard antes de facturar
+                    </p>
+                    <div className="flex gap-4">
+                       <span className="text-xs font-black text-slate-400 bg-white px-6 py-3 rounded-full border border-slate-200 shadow-sm uppercase">Bloqueo de Seguridad Activo</span>
+                    </div>
+                </div>
+            )}
+
             <style>{`.animate-fade-in { animation: fadeIn 0.5s ease-out; } @keyframes fadeIn { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }`}</style>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -761,6 +907,7 @@ function Facturacion() {
                         </div>
                         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                             <option>Todos</option>
+                            <option>Web: Pendiente</option>
                             <option>Pagada</option>
                             <option>Adeuda</option>
                             <option>Pendiente de Entrega</option>
@@ -787,7 +934,14 @@ function Facturacion() {
                             {paginatedVentas.map((venta) => {
                                 const clienteNombre = venta.clienteNombre || (clientes.find(c => c.id === venta.clienteId)?.nombre) || 'Unknown';
                                 const vendedorNombre = venta.vendedorNombre || (vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto) || 'Unknown';
-                                const statusColor = { 'Pagada': 'bg-green-100 text-green-700 border-green-200', 'Adeuda': 'bg-amber-100 text-amber-700 border-amber-200', 'Pendiente de Entrega': 'bg-indigo-100 text-indigo-700 border-indigo-200', 'Repartiendo': 'bg-blue-100 text-blue-700 border-blue-200', 'Anulada': 'bg-slate-100 text-slate-500 border-slate-200' }[venta.estado] || 'bg-slate-100 text-slate-600';
+                                const statusColor = { 
+                                    'Web: Pendiente': 'bg-indigo-600 text-white border-indigo-700 animate-pulse',
+                                    'Pagada': 'bg-green-100 text-green-700 border-green-200', 
+                                    'Adeuda': 'bg-amber-100 text-amber-700 border-amber-200', 
+                                    'Pendiente de Entrega': 'bg-indigo-100 text-indigo-700 border-indigo-200', 
+                                    'Repartiendo': 'bg-blue-100 text-blue-700 border-blue-200', 
+                                    'Anulada': 'bg-slate-100 text-slate-500 border-slate-200' 
+                                }[venta.estado] || 'bg-slate-100 text-slate-600';
                                 return (
                                 <tr key={venta.id} className="group hover:bg-slate-50/80 transition-colors">
                                     <td className="px-6 py-4 text-xs font-mono font-bold text-slate-500">#{venta.numeroFactura || venta.id.substring(0, 6)}</td>
@@ -798,12 +952,39 @@ function Facturacion() {
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${statusColor}`}>
                                             {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado}
                                         </span>
+                                        {venta.facturaAfip && !venta.afipCAE && (
+                                            <span title="Factura guardada sin CAE de AFIP" className="ml-1.5 px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded border border-red-200 uppercase cursor-help">Sin CAE ⚠</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 font-bold text-slate-800">{formatCurrency(venta.totalVenta)}</td>
                                     <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => printVentaFromList(venta)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"><PrintIcon/></button>
-                                            <button onClick={() => handleDeleteInvoice(venta)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon/></button>
+                                        <div className="flex justify-end items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                            {venta.estado === 'Web: Pendiente' ? (
+                                                <button
+                                                    onClick={() => handleProcessWebOrder(venta)}
+                                                    className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg hover:bg-indigo-700 transition-all flex items-center gap-1 shadow-md shadow-indigo-600/20"
+                                                >
+                                                    <PlusIcon className="w-3 h-3"/> PROCESAR
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    {(venta.estado === 'Pendiente de Entrega' || venta.estado === 'Repartiendo') && (
+                                                        <select
+                                                            value={venta.estado}
+                                                            onChange={(e) => handleUpdateEstado(venta.id, e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="px-2 py-1 text-[10px] font-bold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                                                        >
+                                                            <option value="Pendiente de Entrega">Pendiente</option>
+                                                            <option value="Repartiendo">Repartiendo</option>
+                                                            <option value="Entregada">Entregada</option>
+                                                            <option value="Pagada">Pagada</option>
+                                                        </select>
+                                                    )}
+                                                    <button onClick={() => printVentaFromList(venta)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"><PrintIcon/></button>
+                                                    <button onClick={() => handleDeleteInvoice(venta)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon/></button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -843,19 +1024,43 @@ function Facturacion() {
                                     
                                     <div className="col-span-1">
                                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Cliente</label>
-                                         <input type="text" placeholder="Buscar..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="w-full mb-2 px-3 py-1.5 bg-slate-50 border-none rounded-lg text-xs"/>
-                                         <select value={newInvoice.clienteId} onChange={handleClientChange} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" size={3}>
-                                            <option value="">-- Consumidor Final --</option>
-                                            {filteredClients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                        </select>
+                                         {newInvoice.clienteId ? (
+                                             <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl mb-1">
+                                                 <span className="flex-1 text-sm font-bold text-indigo-800 truncate">{newInvoice.clienteNombre}</span>
+                                                 <button onMouseDown={() => handleClientChange('')} className="text-indigo-300 hover:text-red-500 transition-colors flex-shrink-0"><XIcon /></button>
+                                             </div>
+                                         ) : (
+                                             <div className="relative mb-1">
+                                                 <input
+                                                     type="text"
+                                                     placeholder="Buscar cliente..."
+                                                     value={clientSearchTerm}
+                                                     onChange={(e) => { setClientSearchTerm(e.target.value); setClientDropdownOpen(true); }}
+                                                     onFocus={() => setClientDropdownOpen(true)}
+                                                     onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
+                                                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                 />
+                                                 {clientDropdownOpen && (
+                                                     <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                                                         <button onMouseDown={() => handleClientChange('')} className="w-full px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-50 border-b border-slate-100 font-medium">— Consumidor Final —</button>
+                                                         {filteredClients.map(c => (
+                                                             <button key={c.id} onMouseDown={() => handleClientChange(c.id)} className="w-full px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border-b border-slate-50 last:border-0">
+                                                                 {c.nombre || c.nombreCompleto}
+                                                             </button>
+                                                         ))}
+                                                         {filteredClients.length === 0 && <p className="px-3 py-3 text-xs text-slate-400 text-center">Sin resultados</p>}
+                                                     </div>
+                                                 )}
+                                             </div>
+                                         )}
                                         {newInvoice.listaPreciosId && <span className="text-[10px] text-amber-600 font-bold mt-1 block">⭐ Lista Aplicada: {newInvoice.listaPreciosId}</span>}
-                                        
+
                                         {/* --- CHECKBOX AFIP MEJORADO --- */}
                                         <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                                            <input 
-                                                type="checkbox" 
-                                                id="chkAfip" 
-                                                checked={newInvoice.facturaAfip} 
+                                            <input
+                                                type="checkbox"
+                                                id="chkAfip"
+                                                checked={newInvoice.facturaAfip}
                                                 onChange={(e) => setNewInvoice({...newInvoice, facturaAfip: e.target.checked})}
                                                 className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500"
                                             />
@@ -867,6 +1072,13 @@ function Facturacion() {
                                     <div className="col-span-2">
                                         <textarea placeholder="Observaciones..." value={newInvoice.observaciones} onChange={(e) => setNewInvoice({...newInvoice, observaciones: e.target.value})} rows="2" className="w-full px-3 py-2 bg-slate-50 border-none rounded-xl text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
                                     </div>
+
+                                    {processingWebOrderId && !newInvoice.clienteId && (
+                                        <div className="col-span-2 p-3 bg-amber-50 rounded-xl border border-amber-200 animate-pulse">
+                                            <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Bridging (Vinculación)</p>
+                                            <p className="text-xs text-amber-700 font-bold">⚠️ Este pedido proviene de la WEB. Selecciona un cliente registrado para vincular su cuenta corriente.</p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="bg-slate-50 rounded-2xl p-4 min-h-[250px] flex flex-col border border-slate-100">
@@ -969,6 +1181,21 @@ function Facturacion() {
             )}
             
             {isCollectModalOpen && ( <CollectSaleModal total={calculateTotal()} onClose={() => setIsCollectModalOpen(false)} onConfirm={(paymentData) => handleSaveInvoice(paymentData)} /> )}
+
+            {confirmClientChange !== null && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-slate-100">
+                        <h3 className="text-lg font-bold text-slate-800 mb-2">¿Cambiar cliente?</h3>
+                        <p className="text-sm text-slate-500 mb-6">
+                            Hay <strong className="text-slate-700">{newInvoice.items.length} producto(s)</strong> en el carrito. Al cambiar de cliente se limpiarán (los precios pueden variar según lista asignada).
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmClientChange(null)} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">Cancelar</button>
+                            <button onClick={() => { _applyClientChange(confirmClientChange); setConfirmClientChange(null); }} className="flex-1 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors">Sí, cambiar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

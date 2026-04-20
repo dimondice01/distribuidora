@@ -9,7 +9,8 @@ import {
   doc 
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import Button from './Button'; // <--- IMPORTACIÓN CLAVE
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 
 // --- ICONOS PREMIUM (Stroke 1.5, Rounded) ---
 const Icono = ({ path, d2, className="w-5 h-5" }) => (
@@ -41,6 +42,8 @@ function Clientes({ onViewDetail }) {
   const [clientes, setClientes] = useState([]);
   const [filteredClientes, setFilteredClientes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterZona, setFilterZona] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'nombre', direction: 'asc' });
   
   const [rubros, setRubros] = useState([]);
   const [zonas, setZonas] = useState([]); 
@@ -51,7 +54,8 @@ function Clientes({ onViewDetail }) {
   const initialClientState = {
     nombre: '', telefono: '', direccion: '', barrio: '', localidad: '', email: '',
     rubroId: '', zonaId: '', listaPreciosAsignada: '', vendedorAsignadoId: '', 
-    requiereFacturaAfip: false, tipoDocumento: 'SC', numeroDocumento: '', dni: '' 
+    isArca: false, condicionIva: 'CF', tipoDocumento: 'SC', numeroDocumento: '', dni: '',
+    lat: '', lng: '' 
   };
 
   const [newCliente, setNewCliente] = useState(initialClientState);
@@ -62,15 +66,17 @@ function Clientes({ onViewDetail }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  const clientesCollectionRef = collection(db, 'clientes');
+  const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc, getTenantCollection } = useFirestore();
 
-  // 1. CARGA DE DATOS
+  // 1. CARGA DE DATOS (Filtrado por Tenant)
   useEffect(() => {
-    const unsubRubros = onSnapshot(collection(db, 'rubros'), (s) => setRubros(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubZonas = onSnapshot(collection(db, 'zonas'), (s) => setZonas(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubListas = onSnapshot(collection(db, 'listas_precios'), (s) => setPriceLists(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubVend = onSnapshot(collection(db, 'vendedores'), (s) => setVendedores(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubClientes = onSnapshot(clientesCollectionRef, (s) => {
+    if (!tenantId) return;
+
+    const unsubRubros = onTenantSnapshot('rubros', (s) => setRubros(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubZonas = onTenantSnapshot('zonas', (s) => setZonas(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubListas = onTenantSnapshot('listas_precios', (s) => setPriceLists(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubVend = onTenantSnapshot('vendedores', (s) => setVendedores(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubClientes = onTenantSnapshot('clientes', (s) => {
       const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
       setClientes(data);
       setFilteredClientes(data);
@@ -79,20 +85,59 @@ function Clientes({ onViewDetail }) {
     return () => {
         unsubRubros(); unsubZonas(); unsubListas(); unsubVend(); unsubClientes();
     };
-  }, []);
+  }, [tenantId]);
   
-  // 2. FILTROS
+  // 2. FILTROS Y ORDENAMIENTO
   useEffect(() => {
-    const lower = searchTerm.toLowerCase();
-    const results = clientes.filter(c =>
-      (c.nombre && c.nombre.toLowerCase().includes(lower)) ||
-      (c.direccion && c.direccion.toLowerCase().includes(lower)) ||
-      (c.numeroDocumento && c.numeroDocumento.includes(searchTerm)) ||
-      (c.barrio && c.barrio.toLowerCase().includes(lower))
-    );
+    let results = clientes;
+
+    if (filterZona) {
+      results = results.filter(c => c.zonaId === filterZona);
+    }
+
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      results = results.filter(c =>
+        (c.nombre && c.nombre.toLowerCase().includes(lower)) ||
+        (c.direccion && c.direccion.toLowerCase().includes(lower)) ||
+        (c.numeroDocumento && c.numeroDocumento.includes(searchTerm)) ||
+        (c.barrio && c.barrio.toLowerCase().includes(lower))
+      );
+    }
+
+    if (sortConfig.key) {
+      results = [...results].sort((a, b) => {
+        let valA = a[sortConfig.key] || '';
+        let valB = b[sortConfig.key] || '';
+        
+        if (sortConfig.key === 'zonaId') {
+          valA = zonas.find(z => z.id === a.zonaId)?.nombre || '';
+          valB = zonas.find(z => z.id === b.zonaId)?.nombre || '';
+        } else if (sortConfig.key === 'vendedorAsignadoId') {
+          valA = vendedores.find(v => v.id === a.vendedorAsignadoId)?.nombreCompleto || '';
+          valB = vendedores.find(v => v.id === b.vendedorAsignadoId)?.nombreCompleto || '';
+        }
+
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     setFilteredClientes(results);
     setCurrentPage(1);
-  }, [searchTerm, clientes]);
+  }, [searchTerm, filterZona, sortConfig, clientes, zonas, vendedores]);
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   // Helpers de Nombre
   const getRubroNombre = (id) => rubros.find(r => r.id === id)?.nombre || <span className="text-slate-300">-</span>;
@@ -115,18 +160,26 @@ function Clientes({ onViewDetail }) {
   const handleAddCliente = async (e) => {
     e.preventDefault();
     if (!newCliente.nombre.trim() || !newCliente.zonaId) { toast.error('Nombre y Zona son obligatorios.'); return; }
-    if (newCliente.requiereFacturaAfip && (!newCliente.numeroDocumento || newCliente.tipoDocumento === 'SC')) {
+    if (newCliente.isArca && (!newCliente.numeroDocumento || newCliente.tipoDocumento === 'SC')) {
         toast.error('Complete datos fiscales.'); return;
     }
     try {
-      await addDoc(clientesCollectionRef, { ...newCliente, fechaCreacion: new Date() });
+      await addDoc(getTenantCollection('clientes'), { 
+        ...newCliente, 
+        condicionIva: newCliente.isArca ? newCliente.condicionIva : 'CF',
+        companyId: tenantId, 
+        fechaCreacion: new Date() 
+      });
       toast.success('Cliente agregado'); closeNewModal();
-    } catch (error) { console.error(error); toast.error('Error al agregar.'); }
+    } catch (error) { 
+        console.error("Error add client:", error);
+        toast.error('Error al agregar: ' + error.message); 
+    }
   };
 
   const handleDeleteCliente = async (id) => {
     if (window.confirm('¿Eliminar cliente?')) {
-      try { await deleteDoc(doc(db, 'clientes', id)); } catch (error) { toast.error('Error al eliminar.'); }
+      try { await deleteTenantDoc('clientes', id); } catch (error) { toast.error('Error al eliminar.'); }
     }
   };
   
@@ -134,8 +187,9 @@ function Clientes({ onViewDetail }) {
     setEditingCliente({
       ...initialClientState, ...cliente, 
       zonaId: cliente.zonaId || '', listaPreciosAsignada: cliente.listaPreciosAsignada || '',
-      vendedorAsignadoId: cliente.vendedorAsignadoId || '', requiereFacturaAfip: cliente.requiereFacturaAfip || false,
-      tipoDocumento: cliente.tipoDocumento || 'SC', numeroDocumento: cliente.numeroDocumento || ''
+      vendedorAsignadoId: cliente.vendedorAsignadoId || '', isArca: cliente.isArca || false,
+      tipoDocumento: cliente.tipoDocumento || 'SC', numeroDocumento: cliente.numeroDocumento || '',
+      lat: cliente.lat || '', lng: cliente.lng || ''
     });
     setIsEditModalOpen(true);
   };
@@ -150,7 +204,11 @@ function Clientes({ onViewDetail }) {
     if (!editingCliente.nombre.trim() || !editingCliente.zonaId) { toast.error('Faltan datos.'); return; }
     try {
       const { id, ...data } = editingCliente;
-      await updateDoc(doc(db, 'clientes', id), data);
+      const finalData = {
+        ...data,
+        condicionIva: data.isArca ? data.condicionIva : 'CF'
+      };
+      await updateTenantDoc('clientes', id, finalData);
       toast.success('Actualizado'); setIsEditModalOpen(false); setEditingCliente(null);
     } catch (error) { console.error(error); toast.error('Error al actualizar.'); }
   };
@@ -262,33 +320,58 @@ function Clientes({ onViewDetail }) {
             {/* FISCAL */}
             <div className={`p-5 rounded-2xl border shadow-sm transition-all duration-300 ${data.requiereFacturaAfip ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-100'}`}>
                 <div className="flex justify-between items-center mb-4">
-                    <h4 className={`text-xs font-bold uppercase tracking-wider ${data.requiereFacturaAfip ? 'text-indigo-500' : 'text-slate-400'}`}>Datos Fiscales</h4>
+                    <h4 className={`text-xs font-bold uppercase tracking-wider ${data.isArca ? 'text-indigo-500' : 'text-slate-400'}`}>Datos Fiscales</h4>
                     <label className="flex items-center cursor-pointer group">
-                        <div className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${data.requiereFacturaAfip ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${data.requiereFacturaAfip ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                        <div className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${data.isArca ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${data.isArca ? 'translate-x-4' : 'translate-x-0'}`}></div>
                         </div>
-                        <input type="checkbox" name="requiereFacturaAfip" checked={data.requiereFacturaAfip} onChange={handleChange} className="hidden" />
-                        <span className={`ml-2 text-xs font-bold transition-colors ${data.requiereFacturaAfip ? 'text-indigo-700' : 'text-slate-500'}`}>Factura A</span>
+                        <input type="checkbox" name="isArca" checked={data.isArca} onChange={handleChange} className="hidden" />
+                        <span className={`ml-2 text-xs font-bold transition-colors ${data.isArca ? 'text-indigo-700' : 'text-slate-500'}`}>Factura A</span>
                     </label>
                 </div>
 
                 {data.requiereFacturaAfip ? (
-                    <div className="grid grid-cols-3 gap-3 animate-fade-in-up">
-                        <div className="col-span-1">
-                            <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Tipo</label>
-                            <select name="tipoDocumento" value={data.tipoDocumento} onChange={handleChange} className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
-                                {DOCUMENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                            </select>
+                    <div className="space-y-4 animate-fade-in-up">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Condición IVA</label>
+                                <select 
+                                    name="condicionIva" value={data.condicionIva} 
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        handleChange({ target: { name: 'condicionIva', value: val }});
+                                        if (val === 'RI' && !data.isArca) {
+                                            handleChange({ target: { name: 'isArca', value: true, type: 'checkbox', checked: true }});
+                                        }
+                                    }}
+                                    className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                >
+                                    <option value="RI">Resp. Inscripto</option>
+                                    <option value="MT">Monotributo</option>
+                                    <option value="EX">Exento</option>
+                                    <option value="NR">No Responsable</option>
+                                    <option value="CF">Cons. Final (Registrado)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Tipo Doc</label>
+                                <select name="tipoDocumento" value={data.tipoDocumento} onChange={handleChange} className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                                    {DOCUMENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                                </select>
+                            </div>
                         </div>
-                        <div className="col-span-2">
+                        <div>
                             <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Número / CUIT</label>
-                            <input type="text" name="numeroDocumento" value={data.numeroDocumento} onChange={handleChange} className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sin guiones"/>
+                            <input type="text" name="numeroDocumento" value={data.numeroDocumento} onChange={handleChange} className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sin guiones"/>
                         </div>
                     </div>
                 ) : (
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">DNI (Uso Interno)</label>
-                        <input type="text" name="dni" value={data.dni} onChange={handleChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none"/>
+                    <div className="space-y-4">
+                        <p className="text-[10px] text-slate-400 italic">El cliente será tratado como Consumidor Final (CF) para facturación simplificada.</p>
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">DNI (Uso Interno)</label>
+                            <input type="text" name="dni" value={data.dni} onChange={handleChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none"/>
+                        </div>
                     </div>
                 )}
             </div>
@@ -310,17 +393,33 @@ function Clientes({ onViewDetail }) {
         </Button>
       </div>
       
-      {/* SEARCH BAR PREMIUM */}
-      <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400"><SearchIcon /></span>
-            <input 
-                type="text" 
-                placeholder="Buscar cliente por nombre, dirección, barrio..." 
-                className="w-full pl-12 pr-4 py-3 bg-transparent border-none text-slate-700 font-medium placeholder-slate-400 focus:ring-0 outline-none text-lg"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {/* SEARCH BAR PREMIUM & FILTROS */}
+      <div className="flex flex-col md:flex-row gap-3 mb-6">
+        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex-1">
+          <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400"><SearchIcon /></span>
+              <input 
+                  type="text" 
+                  placeholder="Buscar cliente por nombre, dirección, barrio..." 
+                  className="w-full pl-12 pr-4 py-3 bg-transparent border-none text-slate-700 font-medium placeholder-slate-400 focus:ring-0 outline-none text-lg"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+              />
+          </div>
+        </div>
+
+        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-64 flex items-center relative">
+            <select
+               value={filterZona}
+               onChange={(e) => setFilterZona(e.target.value)}
+               className="w-full bg-transparent border-none text-slate-700 font-medium focus:ring-0 outline-none text-sm cursor-pointer py-3 pl-4 pr-10 appearance-none"
+            >
+               <option value="">Todas las Zonas</option>
+               {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+            </select>
+            <div className="absolute right-4 pointer-events-none text-slate-400">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </div>
         </div>
       </div>
 
@@ -330,12 +429,60 @@ function Clientes({ onViewDetail }) {
           <table className="min-w-full whitespace-nowrap border-separate border-spacing-y-0">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 rounded-tl-2xl">Nombre / Razón Social</th>
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Zona</th>
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Ubicación</th>
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Vendedor</th>
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Fiscal</th>
-                <th className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Lista</th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 rounded-tl-2xl cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('nombre')}
+                >
+                  <div className="flex items-center gap-2">
+                    Nombre / Razón Social
+                    {sortConfig.key === 'nombre' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('zonaId')}
+                >
+                  <div className="flex items-center gap-2">
+                    Zona
+                    {sortConfig.key === 'zonaId' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('direccion')}
+                >
+                  <div className="flex items-center gap-2">
+                    Ubicación
+                    {sortConfig.key === 'direccion' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('vendedorAsignadoId')}
+                >
+                  <div className="flex items-center gap-2">
+                    Vendedor
+                    {sortConfig.key === 'vendedorAsignadoId' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('condicionIva')}
+                >
+                  <div className="flex items-center gap-2">
+                    Fiscal
+                    {sortConfig.key === 'condicionIva' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('listaPreciosAsignada')}
+                >
+                  <div className="flex items-center gap-2">
+                    Lista
+                    {sortConfig.key === 'listaPreciosAsignada' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
                 <th className="px-6 py-5 text-right text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 rounded-tr-2xl">Acciones</th>
               </tr>
             </thead>
@@ -381,14 +528,24 @@ function Clientes({ onViewDetail }) {
                     </td>
 
                     <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
-                        {cliente.requiereFacturaAfip ? (
-                            <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100 mb-1">FACTURA A</span>
-                                <span className="text-[10px] text-slate-500 font-mono">{cliente.numeroDocumento}</span>
+                        <div className="flex flex-col">
+                            {cliente.isArca ? (
+                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100 mb-1 uppercase tracking-tighter">FACTURA {cliente.condicionIva === 'RI' ? 'A' : 'B'}</span>
+                            ) : (
+                                <span className="text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-0.5 rounded w-fit border border-slate-100 mb-1 tracking-tighter uppercase whitespace-nowrap">CONSUMIDOR FINAL</span>
+                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                    cliente.condicionIva === 'RI' ? 'bg-amber-100 text-amber-700' :
+                                    cliente.condicionIva === 'MT' ? 'bg-emerald-100 text-emerald-700' :
+                                    cliente.condicionIva === 'EX' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-slate-100 text-slate-500'
+                                }`}>
+                                    {cliente.condicionIva || 'CF'}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono font-bold tracking-tighter">{cliente.numeroDocumento || cliente.dni || 'S/D'}</span>
                             </div>
-                        ) : (
-                            <span className="text-xs text-slate-400 font-medium">Cons. Final</span>
-                        )}
+                        </div>
                     </td>
 
                     <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">

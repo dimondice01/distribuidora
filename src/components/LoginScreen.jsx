@@ -23,7 +23,7 @@ const NoarLogoLogin = () => (
 );
 
 function LoginScreen() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,37 +33,27 @@ function LoginScreen() {
     setError('');
     setLoading(true);
 
-    if (!username || !password) {
+    if (!email || !password) {
       setError('Por favor, completa todos los campos.');
       setLoading(false);
       return;
     }
 
     try {
-      const q = query(collection(db, "vendedores"), where("username", "==", username.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setError('Usuario no encontrado o inactivo.');
-        setLoading(false);
-        return;
-      }
-
-      const vendedorData = querySnapshot.docs[0].data();
-      const userEmail = vendedorData.email;
-      
       const auth = getAuth();
-      await signInWithEmailAndPassword(auth, userEmail, password);
+      await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       // El onAuthStateChanged en App.jsx manejará la redirección
 
     } catch (err) {
       console.error("Error de autenticación:", err.code);
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+        setError('El correo electrónico no es válido.');
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('La contraseña ingresada es incorrecta.');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Demasiados intentos fallidos. Espere unos minutos.');
       } else {
-        setError('No se pudo iniciar sesión. Intente nuevamente.');
+        setError('No se pudo iniciar sesión. Verifique sus credenciales.');
       }
     } finally {
       setLoading(false);
@@ -89,17 +79,17 @@ function LoginScreen() {
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-xs font-bold text-slate-400 uppercase mb-1.5 ml-1">Usuario</label>
+              <label htmlFor="email" className="block text-xs font-bold text-slate-400 uppercase mb-1.5 ml-1">Correo Electrónico</label>
               <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
                 required
                 className="block w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium"
-                placeholder="Ej: administrador"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="ejemplo@correo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>

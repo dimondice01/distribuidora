@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase.js';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, orderBy, query } from 'firebase/firestore';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 
 // --- Iconos SVG ---
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
@@ -16,17 +17,16 @@ function Zonas() {
     const [error, setError] = useState('');
     const [zoneToDelete, setZoneToDelete] = useState(null);
 
+    const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
+
     useEffect(() => {
-        const q = query(collection(db, 'zonas'), orderBy('nombre'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!tenantId) return;
+        const unsubscribe = onTenantSnapshot('zonas', (snapshot) => {
             const zonasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setZonas(zonasData);
-        }, (err) => {
-            console.error("Error al cargar zonas:", err);
-            setError("No se pudieron cargar las zonas.");
-        });
+        }, [{ field: 'nombre', direction: 'asc' }]);
         return () => unsubscribe();
-    }, []);
+    }, [tenantId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -37,10 +37,9 @@ function Zonas() {
 
         try {
             if (editingZone) {
-                const zoneRef = doc(db, 'zonas', editingZone.id);
-                await updateDoc(zoneRef, { nombre: nombre.trim() });
+                await updateTenantDoc('zonas', editingZone.id, { nombre: nombre.trim() });
             } else {
-                await addDoc(collection(db, 'zonas'), { nombre: nombre.trim() });
+                await addTenantDoc('zonas', { nombre: nombre.trim() });
             }
             closeModal();
         } catch (err) {
@@ -50,9 +49,8 @@ function Zonas() {
     };
 
     const handleDelete = async () => {
-        if (!zoneToDelete) return;
         try {
-            await deleteDoc(doc(db, 'zonas', zoneToDelete.id));
+            await deleteTenantDoc('zonas', zoneToDelete.id);
             setZoneToDelete(null);
         } catch (err) {
             console.error("Error eliminando zona:", err);

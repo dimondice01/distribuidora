@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase.js';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore.js';
 const PromotionModal = ({ onClose }) => {
+    const { getTenantCollection, addTenantDoc } = useFirestore();
     const [step, setStep] = useState(1);
     const [promoType, setPromoType] = useState('');
 
@@ -19,11 +21,15 @@ const PromotionModal = ({ onClose }) => {
     // Cargar productos para el selector
     useEffect(() => {
         const fetchProducts = async () => {
-            const productsQuery = await getDocs(collection(db, 'productos'));
-            setProducts(productsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            try {
+                const productsQuery = await getDocs(getTenantCollection('productos'));
+                setProducts(productsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (error) {
+                console.error("Error fetching products for promo:", error);
+            }
         };
         fetchProducts();
-    }, []);
+    }, [getTenantCollection]);
 
     const handleSelectType = (type) => {
         setPromoType(type);
@@ -56,7 +62,7 @@ const PromotionModal = ({ onClose }) => {
         }
 
         try {
-            await addDoc(collection(db, 'promociones'), promoData);
+            await addTenantDoc('promociones', promoData);
             alert('¡Promoción creada con éxito!');
             onClose(); // Cierra el modal
         } catch (error) {

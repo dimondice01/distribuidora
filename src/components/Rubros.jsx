@@ -11,7 +11,8 @@ import {
   doc 
 } from 'firebase/firestore';
 import { toast } from 'react-toastify'; 
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 function Rubros() {
   const [rubros, setRubros] = useState([]);
   
@@ -25,11 +26,11 @@ function Rubros() {
   const [editNombre, setEditNombre] = useState('');
   const [editMeta, setEditMeta] = useState('');
 
-  const rubrosCollectionRef = collection(db, 'rubros');
+  const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
 
-  // Cargar rubros (sin cambios)
   useEffect(() => {
-    const unsubscribe = onSnapshot(rubrosCollectionRef, (snapshot) => {
+    if (!tenantId) return;
+    const unsubscribe = onTenantSnapshot('rubros', (snapshot) => {
       const rubrosData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -37,7 +38,7 @@ function Rubros() {
       setRubros(rubrosData);
     });
     return () => unsubscribe();
-  }, []);
+  }, [tenantId]);
 
   // Limpiar el formulario de NUEVO rubro
   const clearForm = () => {
@@ -59,7 +60,7 @@ function Rubros() {
     };
 
     try {
-      await addDoc(rubrosCollectionRef, data);
+      await addTenantDoc('rubros', data);
       toast.success('¡Rubro creado con éxito!');
       clearForm();
     } catch (error) {
@@ -72,8 +73,7 @@ function Rubros() {
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este rubro?')) {
       try {
-        const rubroDoc = doc(db, 'rubros', id);
-        await deleteDoc(rubroDoc);
+        await deleteTenantDoc('rubros', id);
         toast.success('Rubro eliminado.');
       } catch (error) {
         console.error("Error al eliminar rubro: ", error);
@@ -114,8 +114,7 @@ function Rubros() {
     };
 
     try {
-      const rubroDoc = doc(db, 'rubros', editingRubro.id);
-      await updateDoc(rubroDoc, data);
+      await updateTenantDoc('rubros', editingRubro.id, data);
       toast.success('¡Rubro actualizado con éxito!');
       handleModalClose(); // Cerramos el modal
     } catch (error) {

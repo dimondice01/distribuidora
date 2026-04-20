@@ -1,0 +1,39 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // --- HELPERS ---
+    
+    // Verifica si el usuario está autenticado
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Obtiene los datos del usuario desde la colección raíz /users de Firestore
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // --- REGLAS DE CARPETAS ---
+
+    // 1. Productos (Imágenes de productos de la empresa)
+    match /productos/{companyId}/{allPaths=**} {
+      // Lectura pública para que el catálogo web pueda mostrar las imágenes
+      allow read: if true;
+      
+      // La escritura (subir/borrar) requiere que el usuario trabaje en esa empresa
+      allow write: if isSignedIn() && getUserData().companyId == companyId;
+    }
+
+    // 2. Perfiles o Documentos Privados (Carpeta opcional)
+    match /private/{companyId}/{userId}/{allPaths=**} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId && getUserData().companyId == companyId;
+    }
+
+    // Otras rutas por defecto
+    match /{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if false; // Solo permitir escritura en carpetas específicas controladas
+    }
+  }
+}

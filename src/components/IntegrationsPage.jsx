@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, addDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db } from '../firebase'; // Asegúrate que la ruta a tu firebase.js sea correcta
+import { db } from '../firebase'; 
+import { useFirestore } from '../hooks/useFirestore';
 import forge from 'node-forge';
 import { 
     Save, Download, Server, CheckCircle2, XCircle, 
     ShieldCheck, AlertTriangle, FileText, Info, 
-    Loader2, Key, Globe, Activity 
+    Loader2, Key, Globe, Activity,
+    Beaker, Database, Play 
 } from 'lucide-react';
+import { seedCompanyData, seedWorkdaySimulation } from '../utils/seeder';
+import { useShift } from '../contexts/ShiftContext';
+import { toast } from 'react-toastify';
 
 // ==================================================================================
 // 🎓 MODAL DE AYUDA (TUTORIAL PASO A PASO)
@@ -72,6 +77,7 @@ const TutorialModal = ({ isOpen, onClose, cuit }) => {
 // 🚀 COMPONENTE PRINCIPAL
 // ==================================================================================
 const IntegrationsPage = () => {
+    const { tenantId, getTenantCollection, getTenantDoc, addTenantDoc, updateTenantDoc, db } = useFirestore();
     // Estado alineado con el backend (cert/key)
     const [config, setConfig] = useState({
         cuit: '', 
@@ -80,6 +86,7 @@ const IntegrationsPage = () => {
         isProduction: false, 
         cert: '', // Contenido del CRT
         key: '',  // Contenido de la Private Key
+        taxCondition: 'RI',
         active: false
     });
     
@@ -89,7 +96,9 @@ const IntegrationsPage = () => {
     const [showTutorial, setShowTutorial] = useState(false);
     const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-    useEffect(() => { loadConfig(); }, []);
+    useEffect(() => { 
+        if (tenantId) loadConfig(); 
+    }, [tenantId]);
 
     // Detectar cambios para avisar al usuario
     const handleChange = (field, value) => {
@@ -97,25 +106,37 @@ const IntegrationsPage = () => {
         setUnsavedChanges(true);
     };
 
+    const [configDocId, setConfigDocId] = useState(null);
+
     const loadConfig = async () => {
+        if (!tenantId) return;
         setLoading(true);
         try {
-            const snap = await getDoc(doc(db, 'config', 'afip'));
-            if (snap.exists()) {
-                const data = snap.data();
-                // Normalizamos nombres por si vienen viejos
+            // Usamos la colección unificada 'config' filtrando por tipo dentro del tenant
+            const q = query(
+                getTenantCollection('config'), 
+                where('tipo', '==', 'afip'), 
+                limit(1)
+            );
+            const snap = await getDocs(q);
+            
+            if (!snap.empty) {
+                const docSnap = snap.docs[0];
+                const data = docSnap.data();
+                setConfigDocId(docSnap.id);
                 setConfig({
                     cuit: data.cuit || '',
                     ptoVta: data.ptoVta || 1,
                     razonSocial: data.razonSocial || '',
                     isProduction: data.isProduction || false,
-                    cert: data.cert || data.certificate || '',
-                    key: data.key || data.privateKey || '',
+                    cert: data.cert || '',
+                    key: data.key || '',
+                    taxCondition: data.taxCondition || 'RI',
                     active: data.active || false
                 });
             }
         } catch (e) {
-            console.error("Error cargando config:", e);
+            console.error("Error cargando config AFIP:", e);
         } finally {
             setLoading(false);
         }
@@ -174,14 +195,28 @@ const IntegrationsPage = () => {
     };
 
     const handleSave = async () => {
+        if (!tenantId) return;
         setLoading(true);
         try {
-            // Guardamos normalizado (cert/key)
-            await setDoc(doc(db, 'config', 'afip'), config, { merge: true });
+            const finalData = { 
+                ...config, 
+                companyId: tenantId, 
+                tipo: 'afip',
+                updatedAt: new Date() 
+            };
+            
+            if (configDocId) {
+                await updateTenantDoc('config', configDocId, finalData);
+            } else {
+                const newDocRef = await addTenantDoc('config', finalData);
+                setConfigDocId(newDocRef.id);
+            }
+            
             setUnsavedChanges(false);
-            setTestResult(null); // Limpiar tests viejos
-            alert("✅ Configuración guardada correctamente.");
+            setTestResult(null);
+            alert("✅ Configuración de AFIP guardada correctamente.");
         } catch (e) {
+            console.error("Error saving AFIP config:", e);
             alert("Error al guardar: " + e.message);
         } finally {
             setLoading(false);
@@ -269,6 +304,19 @@ const IntegrationsPage = () => {
                                         value={config.razonSocial}
                                         onChange={e => handleChange('razonSocial', e.target.value)}
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Condición Frente al IVA</label>
+                                    <select 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-slate-700"
+                                        value={config.taxCondition}
+                                        onChange={e => handleChange('taxCondition', e.target.value)}
+                                    >
+                                        <option value="RI">Responsable Inscripto (Facturas A y B)</option>
+                                        <option value="MT">Monotributista (Factura C)</option>
+                                        <option value="EX">Exento</option>
+                                        <option value="NR">No Responsable</option>
+                                    </select>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -389,7 +437,6 @@ const IntegrationsPage = () => {
                             <h4 className={`font-bold text-lg ${testResult.status === 'OK' ? 'text-emerald-800' : 'text-red-800'}`}>
                                 {testResult.status === 'OK' ? '¡Conexión Exitosa!' : 'Error de Conexión'}
                             </h4>
-                            
                             {testResult.status === 'OK' ? (
                                 <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                                     <div className="bg-white/60 p-2 rounded">Server: <strong>{testResult.server}</strong></div>
@@ -405,10 +452,122 @@ const IntegrationsPage = () => {
                         </div>
                     </div>
                 )}
+
+                {/* 🧪 SECCIÓN DE QA & TESTING */}
+                <QASeederSection tenantId={tenantId} />
+
             </div>
 
             {/* TUTORIAL MODAL */}
             <TutorialModal isOpen={showTutorial} onClose={() => setShowTutorial(false)} cuit={config.cuit} />
+        </div>
+    );
+};
+
+// --- SUB-COMPONENTE SEEDER ---
+
+const QASeederSection = ({ tenantId }) => {
+    const [seeding, setSeeding] = useState(false);
+    const [seedLog, setSeedLog] = useState([]);
+    const { activeShift } = useShift();
+
+    const handleRunSeeder = async () => {
+        if (!window.confirm("⚠️ ¿Estás seguro? Esto inyectará rubros, productos y clientes de prueba.")) return;
+        setSeeding(true);
+        setSeedLog(["Iniciando reset de catálogo..."]);
+        try {
+            const result = await seedCompanyData(tenantId);
+            setSeedLog(prev => [...prev, ...result, "✅ Catálogo listo."]);
+            toast.success("Seeder completado con éxito");
+        } catch (error) {
+            setSeedLog(prev => [...prev, `❌ Error: ${error.message}`]);
+            toast.error("Error al ejecutar seeder");
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    const handleRunSimulation = async () => {
+        if (!window.confirm("🔥 ¿Simular jornada real? Se crearán Ventas, Cobros y Gastos de hoy.")) return;
+        setSeeding(true);
+        setSeedLog(["Iniciando simulación de movimientos..."]);
+        try {
+            const result = await seedWorkdaySimulation(tenantId, activeShift?.id);
+            setSeedLog(prev => [...prev, ...result]);
+            toast.success("Simulación completada");
+        } catch (error) {
+            setSeedLog(prev => [...prev, `❌ Error: ${error.message}`]);
+            toast.error("Error en simulación");
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    return (
+        <div className="mt-12 bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl border border-slate-800 relative overflow-hidden">
+            {/* Background Decor */}
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+                <Beaker className="w-40 h-40 text-indigo-500" />
+            </div>
+
+            <div className="relative z-10">
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                        <Database className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-black text-white tracking-tighter uppercase">Laboratorio QA</h3>
+                        <p className="text-slate-400 text-xs font-bold tracking-widest">HERRAMIENTAS DE DESARROLLO Y PRUEBAS</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+                        <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                            <Server className="w-4 h-4 text-indigo-400" /> Reset de Catálogo
+                        </h4>
+                        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
+                            Crea Rubros, Zonas, Productos y Clientes base. Ideal para empezar en una compañía vacía.
+                        </p>
+                        <button 
+                            onClick={handleRunSeeder} 
+                            disabled={seeding}
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-3 active:scale-95"
+                        >
+                            {seeding ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+                            POBLAR CATÁLOGO
+                        </button>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+                        <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-emerald-400" /> Simulador de Jornada
+                        </h4>
+                        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
+                            Genera Ventas, Cobros y Gastos con fecha de <b>HOY</b> vinculados a tu turno actual. Para probar Caja y Cta. Cte.
+                        </p>
+                        <button 
+                            onClick={handleRunSimulation} 
+                            disabled={seeding}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-3 active:scale-95"
+                        >
+                            {seeding ? <Loader2 className="w-5 h-5 animate-spin" /> : <Beaker className="w-5 h-5" />}
+                            SIMULAR MOVIMIENTOS
+                        </button>
+                    </div>
+                </div>
+
+                {seedLog.length > 0 && (
+                    <div className="bg-black/50 p-6 rounded-3xl border border-slate-700 font-mono text-[11px] max-h-48 overflow-y-auto">
+                        <p className="text-slate-500 mb-2 border-b border-slate-800 pb-1">CONSOLE_OUTPUT_LOG:</p>
+                        {seedLog.map((msg, i) => (
+                            <p key={i} className={msg.startsWith('❌') ? 'text-rose-400' : 'text-emerald-400'}>
+                                {`> ${msg}`}
+                            </p>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

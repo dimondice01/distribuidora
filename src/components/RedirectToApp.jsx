@@ -16,60 +16,39 @@ const NoarLoader = () => (
 export default function RedirectToApp() {
   const [searchParams] = useSearchParams();
   
-  // Buscamos el ID corto (Nuevo Método) o la Data cruda (Viejo Método de respaldo)
-  const orderId = searchParams.get('orderId'); 
+  // Buscamos el ID corto (Nuevo Método), el ID de empresa, o la Data cruda (Viejo Método de respaldo)
+  const orderId = searchParams.get('orderId') || searchParams.get('p'); 
+  const tenantId = searchParams.get('c'); 
   const legacyData = searchParams.get('data');
 
-  const [status, setStatus] = useState('Iniciando...');
+  const [status, setStatus] = useState('Abriendo App...');
   const [deepLink, setDeepLink] = useState(null);
 
   useEffect(() => {
-    const processRedirect = async () => {
-      
-      // CASO A: Viene con ID corto (Lo estándar ahora)
-      if (orderId) {
-        setStatus('Recuperando pedido de la nube...');
-        try {
-          const docRef = doc(db, "pedidos_temporales", orderId);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const orderData = docSnap.data();
-            
-            // Empaquetamos los items recuperados para la App
-            // La App Móvil espera recibir un parámetro 'data' con el JSON
-            const jsonPayload = JSON.stringify(orderData.items);
-            const finalLink = `movilappnueva://select-client-for-sale?data=${encodeURIComponent(jsonPayload)}`;
-            
-            setDeepLink(finalLink);
-            setStatus('Abriendo Noar ERP...');
-            
-            // Redirección automática
+    // CASO A: Opción 1 (Delega la carga a la App Móvil vía pedidos_temporales)
+    if (orderId && tenantId) {
+        const finalLink = `movilappnueva://pedido?c=${encodeURIComponent(tenantId)}&p=${encodeURIComponent(orderId)}`;
+        setDeepLink(finalLink);
+        
+        setTimeout(() => {
             window.location.href = finalLink;
-          } else {
-            setStatus('El pedido ha expirado o no existe.');
-          }
-        } catch (error) {
-          console.error("Error recuperando pedido:", error);
-          setStatus('Error de conexión. Intente nuevamente.');
-        }
-      } 
-      
-      // CASO B: Viene con JSON directo (Legacy / Backup)
-      else if (legacyData) {
-         setStatus('Procesando datos...');
-         const finalLink = `movilappnueva://select-client-for-sale?data=${encodeURIComponent(legacyData)}`;
-         setDeepLink(finalLink);
-         window.location.href = finalLink;
-      }
-      
-      else {
-          setStatus('Enlace inválido.');
-      }
-    };
-
-    processRedirect();
-  }, [orderId, legacyData]);
+            setStatus('Toca el botón si no abrió automáticamente.');
+        }, 500);
+    } 
+    // CASO B: Legacy JSON Data
+    else if (legacyData) {
+        const finalLink = `movilappnueva://select-client-for-sale?data=${encodeURIComponent(legacyData)}`;
+        setDeepLink(finalLink);
+        
+        setTimeout(() => {
+            window.location.href = finalLink;
+            setStatus('Toca el botón si no abrió automáticamente.');
+        }, 500);
+    } 
+    else {
+        setStatus('Enlace incompleto o inválido.');
+    }
+  }, [orderId, tenantId, legacyData]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center font-sans">

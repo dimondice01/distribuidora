@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot, query, orderBy, Timestamp, doc, writeBatch, addDoc, getDocs, where } from 'firebase/firestore'; 
 import { db } from '../firebase.js'; 
-import { collection, onSnapshot, query, orderBy, Timestamp, doc, writeBatch, addDoc, getDocs } from 'firebase/firestore'; 
 import { toast } from 'react-toastify';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 // --- Iconos SVG (Estilo Lineal Premium) ---
 const CommissionIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1h10v10"/><path d="M10.9 11.1 1 21"/><path d="M13 18a5 5 0 0 0-5-5c-1.3 0-2.6.5-3.5 1.5l.5.5M17 14a5 5 0 0 0-5-5c-1.3 0-2.6.5-3.5 1.5l.5.5"/></svg>;
 const CalendarIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
@@ -64,7 +65,9 @@ const PaymentMethodModal = ({ isOpen, onClose, onConfirm, amount, type }) => {
 };
 
 function ReporteVendedor() {
+    const { tenantId, onTenantSnapshot, addTenantDoc, getTenantCollection, getTenantDoc, db } = useFirestore();
     const [ventas, setVentas] = useState([]);
+    const [cobranzas, setCobranzas] = useState([]);
     const [vendedores, setVendedores] = useState([]);
     const [clientes, setClientes] = useState([]);
     const [error, setError] = useState('');
@@ -80,62 +83,71 @@ function ReporteVendedor() {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalType, setModalType] = useState(null); 
     const [activeVendedorReport, setActiveVendedorReport] = useState(null);
+    const [dataLoaded, setDataLoaded] = useState(false);
 
     useEffect(() => {
-        const qVentas = query(collection(db, 'ventas'), orderBy('fecha', 'desc'));
-        const unsubscribeVentas = onSnapshot(qVentas, (snapshot) => {
-            setVentas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), fecha: doc.data().fecha.toDate() })));
-        }, (err) => setError("Error al cargar ventas."));
+        if (!tenantId) return;
 
-        const qVendedores = collection(db, 'vendedores');
-        const unsubscribeVendedores = onSnapshot(qVendedores, (snapshot) => {
-            setVendedores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const uVentas = onTenantSnapshot('ventas', (s) => {
+            setVentas(s.docs.map(doc => ({ id: doc.id, ...doc.data(), fecha: doc.data().fecha?.toDate() || new Date() })));
+        }, [{ field: 'fecha', direction: 'desc' }]);
+
+        const uCobranzas = onTenantSnapshot('cobranzas', (s) => {
+            setCobranzas(s.docs.map(doc => ({ id: doc.id, ...doc.data(), fecha: doc.data().fecha?.toDate() || new Date(), tipox: 'cobranza' })));
+        }, [{ field: 'fecha', direction: 'desc' }]);
+
+        const uVendedores = onTenantSnapshot('vendedores', (s) => {
+            setVendedores(s.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        const qClientes = collection(db, 'clientes');
-        const unsubscribeClientes = onSnapshot(qClientes, (snapshot) => {
-            setClientes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const uClientes = onTenantSnapshot('clientes', (s) => {
+            setClientes(s.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        const fetchProductsAndCategories = async () => {
+        const fetchPC = async () => {
             try {
-                const catSnap = await getDocs(collection(db, 'categorias'));
-                const catMap = new Map();
-                catSnap.forEach(doc => {
-                    catMap.set(doc.id, doc.data().comisionGeneral || 0);
-                });
-                setCategoriaComisionMap(catMap);
+                const qCat = getTenantCollection('categorias');
+                const catSnap = await getDocs(qCat);
+                const cMap = new Map();
+                catSnap.forEach(d => cMap.set(d.id, d.data().comisionGeneral || 0));
+                setCategoriaComisionMap(cMap);
 
-                const prodSnap = await getDocs(collection(db, 'productos'));
-                const prodMap = new Map();
-                prodSnap.forEach(doc => {
-                    prodMap.set(doc.id, { id: doc.id, ...doc.data() });
-                });
-                setProductMap(prodMap);
+                const qProd = getTenantCollection('productos');
+                const prodSnap = await getDocs(qProd);
+                const pMap = new Map();
+                prodSnap.forEach(d => pMap.set(d.id, { id: d.id, ...d.data() }));
+                setProductMap(pMap);
                 
+                setDataLoaded(true);
             } catch (err) {
-                console.error("Error cargando productos/categorías:", err);
-                setError("Error al cargar datos de productos.");
+                console.error("Error cargando parámetros de reporte:", err);
+                setError("Error al cargar datos operativos.");
+                setDataLoaded(true); // Permitir ver la página aunque fallen los mapas
             }
         };
-        
-        fetchProductsAndCategories();
+        fetchPC();
 
-        return () => { unsubscribeVentas(); unsubscribeVendedores(); unsubscribeClientes(); };
-    }, []);
+        return () => { uVentas(); uCobranzas(); uVendedores(); uClientes(); };
+    }, [tenantId]);
 
     const reportData = useMemo(() => {
         if (productMap.size === 0 || categoriaComisionMap.size === 0) return [];
 
-        let filteredVentas = ventas.filter(v => v.estado !== 'Anulada');
+        // Combinar ventas y cobranzas para el procesamiento
+        const allMovements = [
+            ...ventas.filter(v => v.estado !== 'Anulada').map(v => ({ ...v, tipox: 'venta' })),
+            ...cobranzas.map(c => ({ ...c, tipox: 'cobranza', totalVenta: 0 }))
+        ];
+
+        let filteredMovements = allMovements;
         const start = startDate ? new Date(startDate) : null;
         const end = endDate ? new Date(endDate) : null;
-        if (start) { start.setHours(0, 0, 0, 0); filteredVentas = filteredVentas.filter(v => v.fecha >= start); }
-        if (end) { end.setHours(23, 59, 59, 999); filteredVentas = filteredVentas.filter(v => v.fecha <= end); }
-        if (filterVendedorId) filteredVentas = filteredVentas.filter(v => v.vendedorId === filterVendedorId);
+        if (start) { start.setHours(0, 0, 0, 0); filteredMovements = filteredMovements.filter(v => v.fecha >= start); }
+        if (end) { end.setHours(23, 59, 59, 999); filteredMovements = filteredMovements.filter(v => v.fecha <= end); }
+        if (filterVendedorId) filteredMovements = filteredMovements.filter(v => v.vendedorId === filterVendedorId);
 
-        const results = filteredVentas.reduce((acc, venta) => {
-            const vendedorId = venta.vendedorId;
+        const results = filteredMovements.reduce((acc, mov) => {
+            const vendedorId = mov.vendedorId;
             if (!vendedorId) return acc;
 
             if (!acc[vendedorId]) {
@@ -153,39 +165,38 @@ function ReporteVendedor() {
                 };
             }
             
-            const esCobranza = venta.tipo === 'cobranza';
+            const esCobranza = mov.tipox === 'cobranza' || mov.tipo === 'cobranza';
             let comisionCorrecta = 0;
 
             if (esCobranza) {
-                const monto = venta.pagoEfectivo || venta.montoCobrado || 0;
+                const monto = mov.monto || mov.pagoEfectivo || mov.montoCobrado || 0;
                 acc[vendedorId].totalCobranza += monto;
                 
-                if (!venta.rendido) {
+                // Si es efectivo y no está rendido, sumamos a efectivo en mano
+                if ((mov.metodoPago === 'Efectivo' || !mov.metodoPago) && !mov.rendido) {
                     acc[vendedorId].totalEfectivoMano += monto;
-                    acc[vendedorId].itemsPorRendir.push(venta);
+                    acc[vendedorId].itemsPorRendir.push(mov);
                 }
             } else {
-                comisionCorrecta = recalcularComisionVenta(venta.items, productMap, categoriaComisionMap);
-                acc[vendedorId].totalVenta += venta.totalVenta || 0;
-                acc[vendedorId].totalSaldoPendiente += venta.saldoPendiente || 0;
+                comisionCorrecta = recalcularComisionVenta(mov.items, productMap, categoriaComisionMap);
+                acc[vendedorId].totalVenta += mov.totalVenta || 0;
+                acc[vendedorId].totalSaldoPendiente += mov.saldoPendiente || 0;
             }
 
-            // --- BLINDAJE DE COMISIONES ---
             // Solo sumamos al total LIQUIDABLE si está 'Pagada'. 
-            // Si está 'Adeuda', calculamos la comisión pero NO la sumamos al acumulador de pago.
-            const esPagadaTotalmente = venta.estado === 'Pagada';
-            const comisionGenerada = (esPagadaTotalmente && !venta.comisionLiquidada && !esCobranza) ? comisionCorrecta : 0;
+            const esPagadaTotalmente = mov.estado === 'Pagada';
+            const comisionGenerada = (esPagadaTotalmente && !mov.comisionLiquidada && !esCobranza) ? comisionCorrecta : 0;
             
             acc[vendedorId].comisionALiquidar += comisionGenerada;
             
-            venta.comisionRecalculada = comisionCorrecta; 
-            acc[vendedorId].ventasDetalle.push(venta);
+            mov.comisionRecalculada = comisionCorrecta; 
+            acc[vendedorId].ventasDetalle.push(mov);
 
             return acc;
         }, {});
 
         return Object.values(results);
-    }, [ventas, vendedores, startDate, endDate, filterVendedorId, productMap, categoriaComisionMap]);
+    }, [ventas, cobranzas, vendedores, startDate, endDate, filterVendedorId, productMap, categoriaComisionMap]);
     
     const getClientName = (clientId, fallbackName) => {
         const client = clientes.find(c => c.id === clientId);
@@ -214,7 +225,7 @@ function ReporteVendedor() {
             const { id: vendedorId, nombre, totalEfectivoMano, itemsPorRendir } = activeVendedorReport;
             try {
                 const batch = writeBatch(db);
-                const rendicionRef = doc(collection(db, 'ventas'));
+                const rendicionRef = doc(getTenantCollection('ventas'));
                 
                 batch.set(rendicionRef, {
                     clientName: `Rendición Cobranzas - ${nombre}`,
@@ -231,13 +242,14 @@ function ReporteVendedor() {
                 });
 
                 itemsPorRendir.forEach(item => {
-                    const itemRef = doc(db, 'ventas', item.id);
+                    const itemRef = getTenantDoc('ventas', item.id);
                     batch.update(itemRef, { rendido: true, fechaRendicion: Timestamp.now() });
                 });
 
-                await batch.commit();
+                batch.commit();
                 toast.success(`Rendición registrada como ${method}.`);
                 setSelectedVendedorId(null);
+                setActiveVendedorReport(null);
             } catch (err) {
                 console.error(err);
                 toast.error("Error al rendir.");
@@ -253,20 +265,21 @@ function ReporteVendedor() {
                     metodoPago: method,
                     cierreId: null
                 };
-                await addDoc(collection(db, 'gastos'), gastoData);
+                await addTenantDoc('gastos', gastoData);
 
                 const batch = writeBatch(db);
                 ventasDetalle.forEach(venta => {
                     if (venta.estado === 'Pagada' && !venta.comisionLiquidada && venta.tipo !== 'cobranza') {
                         const comisionDeEstaVenta = recalcularComisionVenta(venta.items, productMap, categoriaComisionMap); 
                         if (comisionDeEstaVenta > 0) {
-                            batch.update(doc(db, 'ventas', venta.id), { comisionLiquidada: true });
+                            batch.update(getTenantDoc('ventas', venta.id), { comisionLiquidada: true });
                         }
                     }
                 });
-                await batch.commit();
+                batch.commit();
                 toast.success(`Comisión liquidada mediante ${method}.`);
                 setSelectedVendedorId(null);
+                setActiveVendedorReport(null);
             } catch (err) {
                 console.error(err);
                 toast.error("Error al liquidar.");
@@ -357,10 +370,10 @@ function ReporteVendedor() {
                                                     </td>
                                                     <td className="px-6 py-4 font-semibold text-gray-800">{getClientName(venta.clienteId, venta.clienteNombre)}</td>
                                                     <td className="px-6 py-4 text-right text-gray-700 font-medium">
-                                                        {formatCurrency(esCobro ? (venta.pagoEfectivo || venta.montoCobrado) : venta.totalVenta)}
+                                                        {formatCurrency(esCobro ? (venta.monto || venta.pagoEfectivo || venta.montoCobrado) : venta.totalVenta)}
                                                     </td>
                                                     <td className="px-6 py-4 text-right font-bold text-indigo-600">
-                                                        {esCobro && !venta.rendido ? formatCurrency(venta.pagoEfectivo || venta.montoCobrado) : (venta.rendido ? <span className="text-gray-400 text-xs font-normal">RENDIDO</span> : '-')}
+                                                        {esCobro && !venta.rendido ? formatCurrency(venta.monto || venta.pagoEfectivo || venta.montoCobrado) : (venta.rendido ? <span className="text-gray-400 text-xs font-normal">RENDIDO</span> : '-')}
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         {comisionTexto}
@@ -391,7 +404,7 @@ function ReporteVendedor() {
         </>
     );
 
-    if (productMap.size === 0 || categoriaComisionMap.size === 0) return <div className="flex h-screen items-center justify-center text-gray-400 animate-pulse">Cargando sistema...</div>;
+    if (!dataLoaded) return <div className="flex h-screen items-center justify-center text-gray-400 animate-pulse">Cargando sistema...</div>;
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen font-sans text-gray-800">
@@ -449,7 +462,7 @@ function ReporteVendedor() {
                                 </tr>
                             ))}
                             {reportData.length === 0 && (
-                                <tr><td colspan="6" className="px-6 py-8 text-center text-gray-400 italic">No se encontraron datos para los filtros seleccionados.</td></tr>
+                                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400 italic">No se encontraron datos para los filtros seleccionados.</td></tr>
                             )}
                         </tbody>
                     </table>

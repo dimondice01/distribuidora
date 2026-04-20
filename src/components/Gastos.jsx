@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js'; 
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
-import Button from './Button'; // Asegúrate de la ruta correcta
+import Button from './Button'; 
+import { useFirestore } from '../hooks/useFirestore';
 // --- Iconos SVG ---
 const PlusIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12h14" /><path d="M12 5v14" /></svg>;
 const EditIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
@@ -25,17 +26,22 @@ function Gastos() {
     const [filterStartDate, setFilterStartDate] = useState(''); 
     const [filterEndDate, setFilterEndDate] = useState('');     
 
+    const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
+
     useEffect(() => {
-        const q = query(collection(db, 'gastos'), orderBy('fechaGasto', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!tenantId) {
+            setGastos([]);
+            return;
+        }
+        const unsubscribe = onTenantSnapshot('gastos', (snapshot) => {
             setGastos(snapshot.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data(),
                 fecha: doc.data().fechaGasto ? doc.data().fechaGasto.toDate() : new Date()
             })));
-        }, (err) => console.error("Error al cargar gastos:", err));
+        }, [{ field: 'fechaGasto', direction: 'desc' }]);
         return () => unsubscribe();
-    }, []);
+    }, [tenantId]);
 
     const filteredAndAggregatedData = useMemo(() => {
         let filtered = gastos;
@@ -87,9 +93,9 @@ function Gastos() {
 
         try {
             if (editingExpenseId) {
-                await updateDoc(doc(db, 'gastos', editingExpenseId), expenseData);
+                await updateTenantDoc('gastos', editingExpenseId, expenseData);
             } else {
-                await addDoc(collection(db, 'gastos'), expenseData);
+                await addTenantDoc('gastos', expenseData);
             }
             setIsModalOpen(false);
         } catch (err) {
@@ -99,9 +105,8 @@ function Gastos() {
     };
 
     const handleDelete = async () => {
-        if (!expenseToDelete) return;
         try {
-            await deleteDoc(doc(db, 'gastos', expenseToDelete.id));
+            await deleteTenantDoc('gastos', expenseToDelete.id);
             setExpenseToDelete(null);
         } catch (error) {
             console.error("Error al eliminar gasto:", error);

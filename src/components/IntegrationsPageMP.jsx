@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, addDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../firebase';
+import { useFirestore } from '../hooks/useFirestore';
 import { 
     CreditCard, Save, Smartphone, Search, CheckCircle2, 
     AlertTriangle, HelpCircle, ExternalLink, Plug, 
-    RefreshCw, Power, Loader2, Eye, EyeOff, XCircle 
+    RefreshCw, Power, Loader2, Eye, EyeOff, XCircle,
+    User, Store, ChevronRight, Trash2, Plus
 } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 // ==================================================================================
 // 🎓 MODAL DE AYUDA (TUTORIAL MP)
@@ -77,21 +80,34 @@ const TutorialModalMP = ({ isOpen, onClose }) => {
 // 🚀 COMPONENTE PRINCIPAL
 // ==================================================================================
 const IntegrationsPageMP = () => {
+    const { tenantId, getTenantCollection, getTenantDoc, addTenantDoc, updateTenantDoc, db } = useFirestore();
     const [config, setConfig] = useState({
         accessToken: '',
-        userId: '', // ID numérico de usuario MP (se obtiene auto)
+        userId: '', 
         active: false
     });
+    const [configDocId, setConfigDocId] = useState(null);
     
     const [terminals, setTerminals] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
-    const [configuring, setConfiguring] = useState(null); // ID del terminal siendo configurado
+    const [configuring, setConfiguring] = useState(null); 
     const [showToken, setShowToken] = useState(false);
     const [tutorialOpen, setTutorialOpen] = useState(false);
     const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-    useEffect(() => { loadConfig(); }, []);
+    // --- NUEVOS ESTADOS PARA ASIGNACIÓN ---
+    const [vendedores, setVendedores] = useState([]);
+    const [cajasQR, setCajasQR] = useState([]); // {id, nombre}
+    const [newCaja, setNewCaja] = useState({ id: '', nombre: '' });
+    const [savingUser, setSavingUser] = useState(null);
+
+    useEffect(() => { 
+        if (tenantId) {
+            loadConfig();
+            loadVendedores();
+        }
+    }, [tenantId]);
 
     const handleChange = (field, value) => {
         setConfig(prev => ({ ...prev, [field]: value }));
@@ -101,30 +117,84 @@ const IntegrationsPageMP = () => {
     const loadConfig = async () => {
         setLoading(true);
         try {
-            const snap = await getDoc(doc(db, 'config', 'mercadopago'));
-            if (snap.exists()) {
-                const data = snap.data();
+            const q = query(getTenantCollection('config'), where('tipo', '==', 'mercadopago'), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const docSnap = snap.docs[0];
+                const data = docSnap.data();
+                setConfigDocId(docSnap.id);
                 setConfig({
                     accessToken: data.accessToken || '',
                     userId: data.userId || '',
                     active: data.active || false
                 });
+                setCajasQR(data.cajasQR || []);
             }
-        } catch (e) { console.error(e); } 
+        } catch (e) { console.error("Error al cargar config MP:", e); } 
         finally { setLoading(false); }
+    };
+
+    const loadVendedores = async () => {
+        const q = getTenantCollection('vendedores');
+        const snap = await getDocs(q);
+        setVendedores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
 
     const handleSave = async () => {
         setLoading(true);
         try {
-            // Guardamos en la ruta raíz del proyecto (Single Tenant)
-            await setDoc(doc(db, 'config', 'mercadopago'), config, { merge: true });
+            const finalData = { ...config, cajasQR, companyId: tenantId, tipo: 'mercadopago' };
+            if (configDocId) {
+                await updateTenantDoc('config', configDocId, finalData);
+            } else {
+                const newDocRef = await addTenantDoc('config', finalData);
+                setConfigDocId(newDocRef.id);
+            }
             setUnsavedChanges(false);
-            alert("✅ Configuración guardada correctamente.");
+            toast.success("✅ Configuración de Mercado Pago guardada.");
         } catch (e) {
-            alert("Error al guardar: " + e.message);
+            console.error(e);
+            toast.error("Error al guardar: " + e.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAddCaja = () => {
+        if (!newCaja.id || !newCaja.nombre) return toast.warning("Completa ID y Nombre de la Caja");
+        setCajasQR([...cajasQR, newCaja]);
+        setNewCaja({ id: '', nombre: '' });
+        setUnsavedChanges(true);
+    };
+
+    const handleRemoveCaja = (id) => {
+        setCajasQR(cajasQR.filter(c => c.id !== id));
+        setUnsavedChanges(true);
+    };
+
+    const handleAssignDevice = async (vendedorId, field, value) => {
+        setSavingUser(vendedorId);
+        try {
+            const v = vendedores.find(v => v.id === vendedorId);
+            const updateObj = { [field]: value };
+            
+            // 1. Actualizar en la subcolección del tenant
+            await updateTenantDoc('vendedores', vendedorId, updateObj);
+            
+            // 2. Sincronizar con users/{uid} para la App Móvil
+            if (v.firebaseAuthUid) {
+                const userRef = doc(db, 'users', v.firebaseAuthUid);
+                await setDoc(userRef, updateObj, { merge: true });
+            }
+
+            // 3. Actualizar estado local
+            setVendedores(prev => prev.map(u => u.id === vendedorId ? { ...u, ...updateObj } : u));
+            toast.success("Asignación actualizada");
+        } catch (e) {
+            console.error(e);
+            toast.error("Error al asignar");
+        } finally {
+            setSavingUser(null);
         }
     };
 
@@ -313,6 +383,86 @@ const IntegrationsPageMP = () => {
                                     <p className="text-xs">Presiona "Buscar" para traer tus dispositivos desde Mercado Pago.</p>
                                 </div>
                             )}
+                        </section>
+
+                        {/* 3. GESTIÓN DE CAJAS VIRTUALES (QR) */}
+                        <section className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <Store size={20} className="text-slate-400"/> Cajas Virtuales (QR)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                                <input type="text" placeholder="ID de la Caja (External ID)" value={newCaja.id} onChange={e => setNewCaja({...newCaja, id: e.target.value})} className="px-4 py-2 bg-slate-50 border rounded-lg text-sm" />
+                                <input type="text" placeholder="Nombre (Ej: Reparto 1)" value={newCaja.nombre} onChange={e => setNewCaja({...newCaja, nombre: e.target.value})} className="px-4 py-2 bg-slate-50 border rounded-lg text-sm" />
+                                <button onClick={handleAddCaja} className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2">
+                                    <Plus size={14}/> Agregar Caja
+                                </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                {cajasQR.map(c => (
+                                    <div key={c.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+                                        <span className="text-[11px] font-bold text-slate-700">{c.nombre} <span className="text-slate-400 font-mono">({c.id})</span></span>
+                                        <button onClick={() => handleRemoveCaja(c.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
+                                    </div>
+                                ))}
+                                {cajasQR.length === 0 && <p className="text-xs text-slate-400 italic">No hay cajas definidas aún.</p>}
+                            </div>
+                        </section>
+
+                        {/* 4. ASIGNACIÓN A USUARIOS */}
+                        <section className="bg-indigo-50/50 rounded-xl p-6 border border-indigo-100">
+                             <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <User size={20} className="text-indigo-500"/> Asignación de Dispositivos por Usuario
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mt-1">Vincula una Caja QR y un Point a cada vendedor/repartidor.</p>
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead>
+                                        <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-indigo-100">
+                                            <th className="py-3 px-2">Vendedor</th>
+                                            <th className="py-3 px-2">Caja (QR)</th>
+                                            <th className="py-3 px-2">Terminal (Point)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-indigo-50">
+                                        {vendedores.map(v => (
+                                            <tr key={v.id} className="group">
+                                                <td className="py-4 px-2">
+                                                    <div className="font-bold text-slate-700">{v.nombreCompleto}</div>
+                                                    <div className="text-[10px] text-slate-400 uppercase font-black">{v.rango}</div>
+                                                </td>
+                                                <td className="py-4 px-2">
+                                                    <select 
+                                                        value={v.mpCajaId || ''} 
+                                                        onChange={(e) => handleAssignDevice(v.id, 'mpCajaId', e.target.value)}
+                                                        disabled={savingUser === v.id}
+                                                        className="w-full max-w-[180px] py-2 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
+                                                    >
+                                                        <option value="">Sin Asignar</option>
+                                                        {cajasQR.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td className="py-4 px-2">
+                                                    <select 
+                                                        value={v.mpDeviceId || ''} 
+                                                        onChange={(e) => handleAssignDevice(v.id, 'mpDeviceId', e.target.value)}
+                                                        disabled={savingUser === v.id}
+                                                        className="w-full max-w-[180px] py-2 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
+                                                    >
+                                                        <option value="">Sin Asignar</option>
+                                                        {terminals.map(t => <option key={t.id} value={t.id}>{t.name} ({t.id.substring(0,4)})</option>)}
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </section>
 
                     </div>
