@@ -21,6 +21,7 @@ function Gastos() {
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [expenseToDelete, setExpenseToDelete] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(15); 
     const [filterStartDate, setFilterStartDate] = useState(''); 
@@ -34,11 +35,10 @@ function Gastos() {
             return;
         }
         const unsubscribe = onTenantSnapshot('gastos', (snapshot) => {
-            setGastos(snapshot.docs.map(doc => ({ 
-                id: doc.id, 
-                ...doc.data(),
-                fecha: doc.data().fechaGasto ? doc.data().fechaGasto.toDate() : new Date()
-            })));
+            setGastos(snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data(), fecha: doc.data().fechaGasto ? doc.data().fechaGasto.toDate() : new Date() }))
+                .filter(g => g.activo !== false)
+            );
         }, [{ field: 'fechaGasto', direction: 'desc' }]);
         return () => unsubscribe();
     }, [tenantId]);
@@ -82,15 +82,16 @@ function Gastos() {
             setError("Por favor, completa todos los campos obligatorios.");
             return;
         }
-        
-        // --- CORRECCIÓN 2: Se añade 'metodoPago' al objeto que se guarda ---
+
         const expenseData = {
             detalle: formData.detalle.trim(),
             monto: Number(formData.monto),
             fechaGasto: Timestamp.fromDate(new Date(formData.fechaGasto)),
             metodoPago: formData.metodoPago,
+            activo: true,
         };
 
+        setIsSaving(true);
         try {
             if (editingExpenseId) {
                 await updateTenantDoc('gastos', editingExpenseId, expenseData);
@@ -101,12 +102,15 @@ function Gastos() {
         } catch (err) {
             console.error("Error al guardar el gasto:", err);
             setError("No se pudo guardar el gasto.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleDelete = async () => {
         try {
-            await deleteTenantDoc('gastos', expenseToDelete.id);
+            // Soft delete: mantiene el registro para auditoría
+            await updateTenantDoc('gastos', expenseToDelete.id, { activo: false, eliminadoEn: Timestamp.now() });
             setExpenseToDelete(null);
         } catch (error) {
             console.error("Error al eliminar gasto:", error);
@@ -206,7 +210,7 @@ function Gastos() {
                                 </select>
                             </div>
                             {error && <p className="text-sm text-red-600 bg-red-100 p-3 rounded-lg border border-red-200">{error}</p>}
-                            <div className="flex justify-end pt-4 space-x-3"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700">{editingExpenseId ? 'Actualizar' : 'Registrar'}</button></div>
+                            <div className="flex justify-end pt-4 space-x-3"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button><button type="submit" disabled={isSaving} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 disabled:opacity-50">{isSaving ? 'Guardando...' : editingExpenseId ? 'Actualizar' : 'Registrar'}</button></div>
                         </form>
                     </div>
                 </div>

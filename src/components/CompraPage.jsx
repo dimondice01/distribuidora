@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, updateDoc, onSnapshot, increment } from 'firebase/firestore';
 import { useFirestore } from '../hooks/useFirestore';
 import { useShift } from '../contexts/ShiftContext';
 import { toast } from 'react-toastify';
@@ -167,7 +167,7 @@ const CompraPage = ({ proveedor, onCancel, onSuccess }) => {
                 const finalCosto = fiscalMode === 'Neto' ? inputCosto * (1 + item.ivaAlicuota / 100) : inputCosto;
                 const finalCostoConImpuestos = finalCosto * (1 + (parseFloat(otrosImpuestos) || 0) / 100);
                 batch.update(productRef, {
-                    stock: item.stockAnterior + (parseFloat(item.cantidad) || 0),
+                    stock: increment(parseFloat(item.cantidad) || 0),
                     costo: finalCostoConImpuestos,
                     precio: parseFloat(item.precioVenta) || 0,
                     lastUpdate: serverTimestamp()
@@ -207,7 +207,7 @@ const CompraPage = ({ proveedor, onCancel, onSuccess }) => {
             await batch.commit();
             toast.success("Factura Guardada!");
             onSuccess();
-        } catch (err) { toast.error("Error al guardar"); } finally { setIsSaving(false); }
+        } catch (err) { console.error(err); toast.error("Error al guardar"); } finally { setIsSaving(false); }
     };
 
     return (

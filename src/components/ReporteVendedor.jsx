@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, orderBy, Timestamp, doc, writeBatch, addDoc, getDocs, where } from 'firebase/firestore'; 
+import { Timestamp, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.js'; 
 import { toast } from 'react-toastify';
 import Button from './Button'; 

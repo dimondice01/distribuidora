@@ -415,40 +415,48 @@ const POS = () => {
     const handleConfirmPayment = async (paymentData) => {
         if (!activeShift) return toast.error("Turno cerrado.");
         const { isAfipEnabled } = paymentData;
+        const isOnline = navigator.onLine;
+
+        if (!isOnline && isAfipEnabled) {
+            toast.error("Sin conexión: no se puede emitir factura AFIP offline.");
+            return;
+        }
+
         setIsSaving(isAfipEnabled ? "Iniciando Trámite Fiscal..." : true);
-        
+
         const client = clients.find(c => c.id === selectedClientId) || { nombre: 'Consumidor Final', id: '' };
-        
+
         // Si es para reparto, el estado debe ser 'Pendiente de Entrega' para que aparezca en Rutas
         const estadoVenta = (selectedClientId && isForDelivery) ? 'Pendiente de Entrega' : 'Pagada';
 
         const cuitCliente = client.numeroDocumento || client.cuit || client.dni || '';
 
-        const saleData = { 
-            companyId: tenantId, 
-            tipo: 'venta_pos', 
-            vendedorId: auth.currentUser?.uid || 'pos', 
-            vendedorNombre: auth.currentUser?.email || 'Cajero', 
-            shiftId: activeShift.id, 
-            fecha: Timestamp.now(), 
-            items: cart.map(i => ({ productId: i.id, nombre: i.nombre, precio: i.precio, costo: i.costo, quantity: i.quantity })), 
-            totalVenta: total, 
-            pagoEfectivo: paymentData.pagoEfectivo, 
-            pagoTransferencia: paymentData.pagoTransferencia, 
-            pagoTarjeta: paymentData.pagoTarjeta, 
-            nroCupon: paymentData.nroCupon, 
-            vuelto: paymentData.vuelto, 
-            clienteId: client.id || '', 
-            clienteNombre: client.nombre || 'Consumidor Final', 
+        const saleData = {
+            companyId: tenantId,
+            tipo: 'venta_pos',
+            vendedorId: auth.currentUser?.uid || 'pos',
+            vendedorNombre: auth.currentUser?.email || 'Cajero',
+            shiftId: activeShift.id,
+            fecha: Timestamp.now(),
+            items: cart.map(i => ({ productId: i.id, nombre: i.nombre, precio: i.precio, costo: i.costo, quantity: i.quantity })),
+            totalVenta: total,
+            pagoEfectivo: paymentData.pagoEfectivo,
+            pagoTransferencia: paymentData.pagoTransferencia,
+            pagoTarjeta: paymentData.pagoTarjeta,
+            nroCupon: paymentData.nroCupon,
+            vuelto: paymentData.vuelto,
+            clienteId: client.id || '',
+            clienteNombre: client.nombre || 'Consumidor Final',
             clienteCuit: cuitCliente,
             clienteCondicionIVA: client.condicionIva || 'CF',
             clienteTipoDoc: (cuitCliente.length === 11) ? 'CUIT' : 'DNI',
-            estado: estadoVenta, 
+            estado: estadoVenta,
             paymentMethod: 'contado',
             facturaAfip: isAfipEnabled,
+            syncPendiente: !isOnline,
             // --- AUTOMATIZACIÓN FISCAL ---
-            afipLetra: (companyConfig?.taxCondition === 'MT') 
-                ? 'C' 
+            afipLetra: (companyConfig?.taxCondition === 'MT')
+                ? 'C'
                 : (client.condicionIva === 'RI' ? 'A' : 'B'),
             companyInfo: {
                 logo: globalLogo,
@@ -463,27 +471,39 @@ const POS = () => {
 
         try {
             let finalSaleId = '';
-            await runTransaction(db, async (t) => {
-                // 1. TODAS LAS LECTURAS (READS) PRIMERO
-                const snaps = [];
-                for (const item of cart) {
-                    const ref = getTenantDoc('productos', item.id);
-                    const snap = await t.get(ref);
-                    snaps.push({ snap, item, ref });
-                }
 
-                // 2. VALIDACIONES Y ESCRITURAS (WRITES) DESPUÉS
-                for (const { snap, item, ref } of snaps) {
-                    if (!snap.exists() || (snap.data().stock || 0) < item.quantity) {
-                        throw new Error(`Stock insuficiente para: ${item.nombre}`);
+            if (isOnline) {
+                // ONLINE: transacción con validación de stock en servidor
+                await runTransaction(db, async (t) => {
+                    // 1. TODAS LAS LECTURAS (READS) PRIMERO
+                    const snaps = [];
+                    for (const item of cart) {
+                        const ref = getTenantDoc('productos', item.id);
+                        const snap = await t.get(ref);
+                        snaps.push({ snap, item, ref });
                     }
-                    t.update(ref, { stock: increment(-item.quantity) });
-                }
 
-                const vRef = doc(getTenantCollection('ventas'));
-                t.set(vRef, saleData);
+                    // 2. VALIDACIONES Y ESCRITURAS (WRITES) DESPUÉS
+                    for (const { snap, item, ref } of snaps) {
+                        if (!snap.exists() || (snap.data().stock || 0) < item.quantity) {
+                            throw new Error(`Stock insuficiente para: ${item.nombre}`);
+                        }
+                        t.update(ref, { stock: increment(-item.quantity) });
+                    }
+
+                    const vRef = doc(getTenantCollection('ventas'));
+                    t.set(vRef, saleData);
+                    finalSaleId = vRef.id;
+                });
+            } else {
+                // OFFLINE: escritura directa, Firestore la encola y sincroniza al reconectar
+                const vRef = await addDoc(getTenantCollection('ventas'), saleData);
                 finalSaleId = vRef.id;
-            });
+                for (const item of cart) {
+                    await updateDoc(getTenantDoc('productos', item.id), { stock: increment(-item.quantity) });
+                }
+                toast.warn("Venta guardada OFFLINE. Se sincronizará al reconectar.", { autoClose: 6000 });
+            }
 
             toast.success("Venta procesada!");
             

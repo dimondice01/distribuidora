@@ -136,10 +136,12 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
         setSelectedProductIds([]);
     };
 
+    const [isSaving, setIsSaving] = useState(false);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (selectedProductIds.length === 0) {
-            alert("Selecciona al menos un producto activador.");
+            toast.error("Selecciona al menos un producto activador.");
             return;
         }
 
@@ -164,7 +166,7 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
             promoData.condicion = { cantidadMinima: parseInt(cantidadLleva) };
             promoData.beneficio = { cantidadAPagar: parseInt(cantidadPaga) };
         } else if (promoType === 'REGALO_POR_COMPRA') {
-            if (!giftProductId) { alert('Selecciona el producto de regalo'); return; }
+            if (!giftProductId) { toast.error('Selecciona el producto de regalo.'); return; }
             const giftProduct = products.find(p => p.id === giftProductId);
             
             promoData.condicion = { cantidadMinima: parseInt(cantidadLleva) };
@@ -175,6 +177,7 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
             };
         }
 
+        setIsSaving(true);
         try {
             if (promoToEdit) {
                 await updateTenantDoc('promociones', promoToEdit.id, promoData);
@@ -187,6 +190,8 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
         } catch (error) {
             console.error(error);
             toast.error('Error al guardar.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -331,12 +336,12 @@ const PromotionModal = ({ onClose, promoToEdit }) => {
                         {step > 1 ? <button type="button" onClick={() => setStep(step - 1)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg">Atrás</button> : <div/>}
                         {step < 3 ? (
                            <button type="button" onClick={() => {
-                               if (step === 1 && !promoType) return alert("Elige tipo");
-                               if (step === 2 && selectedProductIds.length === 0) return alert("Elige productos activadores");
+                               if (step === 1 && !promoType) return toast.error("Elige un tipo de promoción.");
+                               if (step === 2 && selectedProductIds.length === 0) return toast.error("Elige al menos un producto activador.");
                                setStep(step + 1);
                            }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg">Siguiente</button>
                         ) : (
-                            <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-8 rounded-lg transform hover:scale-105 transition">Guardar</button>
+                            <button type="submit" disabled={isSaving} className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-2 px-8 rounded-lg transform hover:scale-105 transition">{isSaving ? 'Guardando...' : 'Guardar'}</button>
                         )}
                     </div>
                 </form>

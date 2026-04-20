@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import Button from './Button'; 
+import { query, where, getDocs, writeBatch } from 'firebase/firestore';
+import Button from './Button';
 import { useFirestore } from '../hooks/useFirestore';
 import { toast } from 'react-toastify';
 // Iconos SVG
@@ -28,6 +27,7 @@ function Categories() {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc, getTenantCollection, db } = useFirestore();
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -73,11 +73,11 @@ function Categories() {
     }
 
     const categoryData = {
-      companyId: tenantId, // Inyección de Multi-Tenancy
       nombre: formData.nombre,
       comisionGeneral: Number(formData.comisionGeneral) || 0
     };
 
+    setIsSaving(true);
     try {
       if (editingCategoryId) {
         await updateTenantDoc('categorias', editingCategoryId, categoryData);
@@ -88,6 +88,8 @@ function Categories() {
     } catch (err) {
       console.error("Error al guardar la categoría:", err);
       setError("No se pudo guardar la categoría.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -275,11 +277,12 @@ function Categories() {
               )}
 
               <div className="flex flex-col gap-2 pt-4">
-                <button 
-                  type="submit" 
-                  className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all transform active:scale-95"
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all transform active:scale-95 disabled:opacity-50"
                 >
-                  {editingCategoryId ? 'Actualizar Categoría' : 'Crear Categoría'}
+                  {isSaving ? 'Guardando...' : (editingCategoryId ? 'Actualizar Categoría' : 'Crear Categoría')}
                 </button>
                 <button 
                   type="button" 

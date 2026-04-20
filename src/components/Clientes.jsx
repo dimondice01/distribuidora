@@ -60,8 +60,9 @@ function Clientes({ onViewDetail }) {
 
   const [newCliente, setNewCliente] = useState(initialClientState);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isNewModalOpen, setIsNewModalOpen] = useState(false); 
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -77,7 +78,7 @@ function Clientes({ onViewDetail }) {
     const unsubListas = onTenantSnapshot('listas_precios', (s) => setPriceLists(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubVend = onTenantSnapshot('vendedores', (s) => setVendedores(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubClientes = onTenantSnapshot('clientes', (s) => {
-      const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      const data = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.activo !== false);
       setClientes(data);
       setFilteredClientes(data);
     });
@@ -163,23 +164,32 @@ function Clientes({ onViewDetail }) {
     if (newCliente.isArca && (!newCliente.numeroDocumento || newCliente.tipoDocumento === 'SC')) {
         toast.error('Complete datos fiscales.'); return;
     }
+    setIsSaving(true);
     try {
-      await addDoc(getTenantCollection('clientes'), { 
-        ...newCliente, 
+      await addTenantDoc('clientes', {
+        ...newCliente,
         condicionIva: newCliente.isArca ? newCliente.condicionIva : 'CF',
-        companyId: tenantId, 
-        fechaCreacion: new Date() 
+        activo: true,
+        fechaCreacion: new Date()
       });
       toast.success('Cliente agregado'); closeNewModal();
-    } catch (error) { 
+    } catch (error) {
         console.error("Error add client:", error);
-        toast.error('Error al agregar: ' + error.message); 
+        toast.error('Error al agregar: ' + error.message);
+    } finally {
+        setIsSaving(false);
     }
   };
 
   const handleDeleteCliente = async (id) => {
-    if (window.confirm('¿Eliminar cliente?')) {
-      try { await deleteTenantDoc('clientes', id); } catch (error) { toast.error('Error al eliminar.'); }
+    if (window.confirm('¿Eliminar cliente? El historial de ventas se conservará.')) {
+      try {
+        await updateTenantDoc('clientes', id, { activo: false, eliminadoEn: new Date() });
+        toast.success('Cliente eliminado.');
+      } catch (error) {
+        console.error(error);
+        toast.error('Error al eliminar.');
+      }
     }
   };
   
@@ -202,15 +212,16 @@ function Clientes({ onViewDetail }) {
   const handleUpdateCliente = async (e) => {
     e.preventDefault();
     if (!editingCliente.nombre.trim() || !editingCliente.zonaId) { toast.error('Faltan datos.'); return; }
+    setIsSaving(true);
     try {
       const { id, ...data } = editingCliente;
-      const finalData = {
-        ...data,
-        condicionIva: data.isArca ? data.condicionIva : 'CF'
-      };
-      await updateTenantDoc('clientes', id, finalData);
+      await updateTenantDoc('clientes', id, { ...data, condicionIva: data.isArca ? data.condicionIva : 'CF' });
       toast.success('Actualizado'); setIsEditModalOpen(false); setEditingCliente(null);
-    } catch (error) { console.error(error); toast.error('Error al actualizar.'); }
+    } catch (error) {
+      console.error(error); toast.error('Error al actualizar.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // --- RENDERIZADO DEL FORMULARIO (MODAL PREMIUM) ---

@@ -36,7 +36,7 @@ function Proveedores({ onRegistrarCompra, onViewDashboard }) {
   useEffect(() => {
     if (!tenantId) return;
     const unsub = onTenantSnapshot('proveedores', (snap) => {
-        setProveedores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setProveedores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(p => p.activo !== false));
     }, [{ field: 'nombre', direction: 'asc' }]);
     return () => unsub();
   }, [tenantId]);
@@ -44,8 +44,7 @@ function Proveedores({ onRegistrarCompra, onViewDashboard }) {
   // CALCULO DE SALDOS EN TIEMPO REAL
   useEffect(() => {
     if (!tenantId) return;
-    const q = getTenantCollection('compras');
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onTenantSnapshot('compras', (snap) => {
         const saldos = {};
         snap.forEach(docSnap => {
             const c = docSnap.data();
@@ -55,7 +54,7 @@ function Proveedores({ onRegistrarCompra, onViewDashboard }) {
         });
         setSaldosPorProveedor(saldos);
     });
-    return unsub;
+    return () => unsub();
   }, [tenantId]);
 
   const openModal = (provider = null) => {
@@ -93,11 +92,12 @@ function Proveedores({ onRegistrarCompra, onViewDashboard }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Estás seguro de eliminar este proveedor?")) return;
+    if (!window.confirm("¿Eliminar proveedor? Las compras y deudas asociadas se conservarán.")) return;
     try {
-        await deleteTenantDoc('proveedores', id);
+        await updateTenantDoc('proveedores', id, { activo: false, eliminadoEn: new Date() });
         toast.success("Proveedor eliminado");
     } catch (err) {
+        console.error(err);
         toast.error("Error al eliminar");
     }
   };

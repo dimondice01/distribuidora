@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db, auth } from '../firebase.js';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, serverTimestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'; 
-import { initializeApp, deleteApp } from 'firebase/app'; 
-import Button from './Button'; 
+import { db } from '../firebase.js';
+import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { toast } from 'react-toastify';
+import Button from './Button';
 import { useFirestore } from '../hooks/useFirestore';
 
 // --- CONFIGURACIÓN DE APP SECUNDARIA ---
@@ -43,6 +44,7 @@ function Vendedores() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const { tenantId, onTenantSnapshot, updateTenantDoc, getTenantDoc, deleteTenantDoc } = useFirestore();
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -109,7 +111,7 @@ function Vendedores() {
     }
 
     let secondaryApp = null;
-    
+    setIsSaving(true);
     try {
       if (editingVendedorId) {
         // 1. Actualizar en la subcolección de la compañía
@@ -171,6 +173,7 @@ function Vendedores() {
         console.log("✅ Usuario creado exitosamente sin perder sesión administrativa.");
       }
       setIsModalOpen(false);
+      toast.success(editingVendedorId ? 'Vendedor actualizado.' : 'Vendedor creado.');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
         setError("Este correo electrónico ya está registrado.");
@@ -179,6 +182,7 @@ function Vendedores() {
       }
       console.error("Error al guardar vendedor:", err);
     } finally {
+        setIsSaving(false);
         if (secondaryApp) {
             await deleteApp(secondaryApp);
         }
@@ -391,7 +395,7 @@ function Vendedores() {
               {error && <p className="text-sm text-red-600 bg-red-100 p-2 rounded-md">{error}</p>}
               <div className="flex justify-end pt-4 space-x-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md">Cancelar</button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border rounded-md">Guardar</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border rounded-md disabled:opacity-50">{isSaving ? 'Guardando...' : 'Guardar'}</button>
               </div>
             </form>
           </div>

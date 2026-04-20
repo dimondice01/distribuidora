@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, Timestamp, increment } from 'firebase/firestore';
 import { useFirestore } from '../hooks/useFirestore';
 import { useShift } from '../contexts/ShiftContext';
 import { toast } from 'react-toastify';
@@ -119,7 +119,7 @@ const CompraForm = ({ proveedor, onCancel, onSuccess }) => {
                 const nuevoPrecio = nuevoCosto * (1 + margenDecimal);
 
                 batch.update(productRef, {
-                    stock: item.stockAnterior + nuevaCantidad,
+                    stock: increment(nuevaCantidad),
                     costo: Number(nuevoCosto.toFixed(2)),
                     precio: Number(nuevoPrecio.toFixed(2)),
                     lastUpdate: serverTimestamp()

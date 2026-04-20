@@ -1,7 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { db } from '../firebase.js'; 
-import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
-import Button from './Button'; 
+import Button from './Button';
 import { useFirestore } from '../hooks/useFirestore';
 // --- Iconos SVG (Estilo iOS) ---
 const TrendingUp = (props) => <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 6 13.5 15.5 10 12 1 21"></polyline><path d="M22 6h-6v6"/></svg>;

@@ -369,6 +369,7 @@ function Facturacion() {
     const [matchedClient, setMatchedClient] = useState(null);
     const [filterStatus, setFilterStatus] = useState('Todos');
     const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [confirmClientChange, setConfirmClientChange] = useState(null); // null | clientId string
     const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
@@ -796,8 +797,10 @@ function Facturacion() {
     };
 
     const handleDeleteAllInvoices = async () => {
+        if (isDeleting) return;
         if (!window.confirm("⚠️ PELIGRO: ¿Estás seguro de BORRAR TODAS las facturas? Esto restaurará el stock de cada venta y reiniciará las métricas. Esta acción no se puede deshacer.")) return;
-        
+
+        setIsDeleting(true);
         try {
             // ✅ CORRECCIÓN CRITICA: Filtrado por Tenant
             const salesSnapshot = await getDocs(getTenantCollection('ventas'));
@@ -827,6 +830,8 @@ function Facturacion() {
         } catch (error) {
             console.error("Error borrando todo:", error);
             toast.error("Hubo un error en la eliminación masiva.");
+        } finally {
+            setIsDeleting(false);
         }
     };
     
@@ -898,8 +903,8 @@ function Facturacion() {
                 <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                     <h2 className="text-xl font-bold text-slate-800">Historial de Operaciones</h2>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={handleDeleteAllInvoices} className="px-3 py-2 bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm">
-                            <TrashIcon className="w-4 h-4"/> RESET TOTAL
+                        <button onClick={handleDeleteAllInvoices} disabled={isDeleting} className="px-3 py-2 bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                            <TrashIcon className="w-4 h-4"/> {isDeleting ? 'BORRANDO...' : 'RESET TOTAL'}
                         </button>
                         <div className="relative group">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><SearchIcon /></span>

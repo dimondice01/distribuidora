@@ -1,17 +1,8 @@
 // En: src/components/Rubros.jsx
 
 import { useState, useEffect } from 'react';
-import { db } from '../firebase.js'; 
-import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc 
-} from 'firebase/firestore';
-import { toast } from 'react-toastify'; 
-import Button from './Button'; 
+import { toast } from 'react-toastify';
+import Button from './Button';
 import { useFirestore } from '../hooks/useFirestore';
 function Rubros() {
   const [rubros, setRubros] = useState([]);
@@ -27,6 +18,7 @@ function Rubros() {
   const [editMeta, setEditMeta] = useState('');
 
   const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -59,6 +51,7 @@ function Rubros() {
       metaSemanal: Number(metaSemanal)
     };
 
+    setIsSaving(true);
     try {
       await addTenantDoc('rubros', data);
       toast.success('¡Rubro creado con éxito!');
@@ -66,6 +59,8 @@ function Rubros() {
     } catch (error) {
       console.error("Error al crear rubro: ", error);
       toast.error('Error al crear el rubro.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -113,13 +108,16 @@ function Rubros() {
       metaSemanal: Number(editMeta)
     };
 
+    setIsSaving(true);
     try {
       await updateTenantDoc('rubros', editingRubro.id, data);
       toast.success('¡Rubro actualizado con éxito!');
-      handleModalClose(); // Cerramos el modal
+      handleModalClose();
     } catch (error) {
       console.error("Error al actualizar rubro: ", error);
       toast.error('Error al actualizar el rubro.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -166,9 +164,9 @@ function Rubros() {
 
           {/* Botón (SOLO GUARDAR) */}
           <div className="flex space-x-2 self-end"> 
-            <Button type="submit" className="w-full">
-  Guardar
-</Button>
+            <Button type="submit" disabled={isSaving} className="w-full">
+              {isSaving ? 'Guardando...' : 'Guardar'}
+            </Button>
           </div>
         </div>
       </form>
@@ -272,9 +270,10 @@ function Rubros() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-blue-700 transition"
+                  disabled={isSaving}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-blue-700 transition disabled:opacity-50"
                 >
-                  Actualizar
+                  {isSaving ? 'Guardando...' : 'Actualizar'}
                 </button>
               </div>
             </form>

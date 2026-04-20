@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDo
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 import { useFirestore } from '../hooks/useFirestore';
 import { useTenant } from '../contexts/TenantContext';
+import { toast } from 'react-toastify';
 import RouteMapMonitor from './RouteMapMonitor';
 
 // Inicializamos Cloud Functions
@@ -43,7 +44,7 @@ const printHTML = (htmlContent) => {
         // Aumentamos el tiempo de espera para asegurar que el QR se renderice
         setTimeout(() => printWindow.print(), 1500);
     } else {
-        alert("El navegador bloqueó la impresión. Por favor, deshabilite el bloqueador de pop-ups.");
+        toast.warn("El navegador bloqueó la impresión. Deshabilite el bloqueador de pop-ups.");
     }
 };
 
@@ -439,14 +440,14 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
     }, [selectedInvoices]);
 
     const handleConfirmDispatch = async () => {
-        if (!assignedRepartidor) return alert("Debes asignar un repartidor.");
-        if (selectedInvoices.length === 0) return alert("La ruta está vacía.");
+        if (!assignedRepartidor) return toast.error("Debes asignar un repartidor.");
+        if (selectedInvoices.length === 0) return toast.error("La ruta está vacía.");
         setIsDispatching(true);
         try {
             await onDispatch(route.id, assignedRepartidor, selectedInvoices, routeSummary);
             onClose();
         } catch (error) {
-            alert("Error al despachar: " + error.message);
+            toast.error("Error al despachar: " + error.message);
             setIsDispatching(false);
         }
     };
@@ -633,7 +634,7 @@ function Rutas() {
             setSelectedRoute({ id: docRef.id, ...newRoute });
             setPlannerReadOnly(false);
             setIsPlannerOpen(true);
-        } catch (error) { console.error("Error al crear la ruta:", error); }
+        } catch (error) { console.error(error); toast.error("Error al crear la ruta."); }
     };
 
     // --- LÓGICA DE DESPACHO INTELIGENTE (AFIP + PDF) ---
@@ -690,9 +691,9 @@ function Rutas() {
                     return inv;
                 });
 
-            } catch (e) { 
+            } catch (e) {
                 console.error(e);
-                alert("ALERTA: Hubo un error al conectar con AFIP. Las facturas se generarán SIN CAE legal. Verifique la conexión.");
+                toast.warn("Error al conectar con AFIP. Facturas generadas SIN CAE legal. Verifique la conexión.", { autoClose: 8000 });
             }
         }
 
@@ -792,8 +793,8 @@ function Rutas() {
                 
                 transaction.delete(routeRef); 
             });
-            alert("Ruta anulada y eliminada correctamente.");
-        } catch (error) { console.error(error); alert("Error al anular: " + error.message); }
+            toast.success("Ruta anulada y eliminada correctamente.");
+        } catch (error) { console.error(error); toast.error("Error al anular: " + error.message); }
     };
 
     const handleViewRoute = (route) => { setSelectedRoute(route); setPlannerReadOnly(true); setIsPlannerOpen(true); };
@@ -971,13 +972,14 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
 
 const TabContentRendicion = ({ routes, allInvoices }) => {
     const [expandedRouteId, setExpandedRouteId] = useState(null);
+    const { updateTenantDoc, deleteTenantDoc } = useFirestore();
     const handleArchiveRoute = async (route) => {
         if (!window.confirm(`¿Confirmar cierre de ruta "${route.nombre}"?\n\nSe archivará la ruta y se liberará al repartidor.`)) return;
-        try { await updateTenantDoc('rutas', route.id, { estado: 'Archivada', fechaCierre: Timestamp.now() }); alert("Ruta cerrada y archivada."); } catch (e) { console.error(e); alert("Error al cerrar."); }
+        try { await updateTenantDoc('rutas', route.id, { estado: 'Archivada', fechaCierre: Timestamp.now() }); toast.success("Ruta archivada correctamente."); } catch (e) { console.error(e); toast.error("Error al cerrar la ruta."); }
     };
     const handleDeleteArchivedRoute = async (routeId) => {
         if(!window.confirm("¿Eliminar este registro del historial? Esta acción es irreversible.")) return;
-        try { await deleteTenantDoc('rutas', routeId); } catch(e) { console.error(e); alert("Error al eliminar."); }
+        try { await deleteTenantDoc('rutas', routeId); toast.success("Registro eliminado."); } catch(e) { console.error(e); toast.error("Error al eliminar."); }
     }
     return (
         <div className="space-y-4 animate-fade-in">

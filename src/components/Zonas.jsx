@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase.js';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, orderBy, query } from 'firebase/firestore';
-import Button from './Button'; 
+import { toast } from 'react-toastify';
+import Button from './Button';
 import { useFirestore } from '../hooks/useFirestore';
 
 // --- Iconos SVG ---
@@ -18,6 +17,7 @@ function Zonas() {
     const [zoneToDelete, setZoneToDelete] = useState(null);
 
     const { tenantId, onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc } = useFirestore();
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (!tenantId) return;
@@ -35,6 +35,7 @@ function Zonas() {
             return;
         }
 
+        setIsSaving(true);
         try {
             if (editingZone) {
                 await updateTenantDoc('zonas', editingZone.id, { nombre: nombre.trim() });
@@ -44,7 +45,10 @@ function Zonas() {
             closeModal();
         } catch (err) {
             console.error("Error guardando zona:", err);
+            toast.error("No se pudo guardar la zona.");
             setError("No se pudo guardar la zona.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -52,9 +56,10 @@ function Zonas() {
         try {
             await deleteTenantDoc('zonas', zoneToDelete.id);
             setZoneToDelete(null);
+            toast.success("Zona eliminada.");
         } catch (err) {
             console.error("Error eliminando zona:", err);
-            setError("No se pudo eliminar la zona.");
+            toast.error("No se pudo eliminar la zona.");
             setZoneToDelete(null);
         }
     };
@@ -131,7 +136,7 @@ function Zonas() {
                             {error && <p className="text-sm text-red-600 bg-red-100 p-2 rounded-md">{error}</p>}
                             <div className="flex justify-end pt-4 space-x-2">
                                 <button type="button" onClick={closeModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border rounded-md">Guardar</button>
+                                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border rounded-md disabled:opacity-50">{isSaving ? 'Guardando...' : 'Guardar'}</button>
                             </div>
                         </form>
                     </div>

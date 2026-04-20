@@ -7,17 +7,15 @@ import { toast } from 'react-toastify';
 import Button from './Button';
 
 const ProveedorCtaCte = ({ proveedor, onBack }) => {
-    const { tenantId, getTenantCollection, getTenantDoc, updateTenantDoc } = useFirestore();
+    const { tenantId, getTenantCollection, getTenantDoc, updateTenantDoc, onTenantSnapshot } = useFirestore();
     const { activeShift } = useShift();
     const [compras, setCompras] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('pendientes'); // 'todas', 'pendientes', 'pagadas'
+    const [filter, setFilter] = useState('pendientes');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [montoPago, setMontoPago] = useState('');
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [isSaving, setIsSaving] = useState(false);
-
-    const { onTenantSnapshot } = useFirestore();
 
     useEffect(() => {
         if (!tenantId || !proveedor.id) return;
