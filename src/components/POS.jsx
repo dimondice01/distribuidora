@@ -517,7 +517,7 @@ const POS = () => {
 
     const handleConfirmPayment = async (paymentData) => {
         if (!activeShift) return toast.error("Turno cerrado.");
-        const { isAfipEnabled } = paymentData;
+        const { isAfipEnabled, esCuentaCorriente } = paymentData;
         const isOnline = navigator.onLine;
 
         if (!isOnline && isAfipEnabled) {
@@ -529,8 +529,9 @@ const POS = () => {
 
         const client = clients.find(c => c.id === selectedClientId) || { nombre: 'Consumidor Final', id: '' };
 
-        // Si es para reparto, el estado debe ser 'Pendiente de Entrega' para que aparezca en Rutas
-        const estadoVenta = (selectedClientId && isForDelivery) ? 'Pendiente de Entrega' : 'Pagada';
+        const estadoVenta = esCuentaCorriente
+            ? (selectedClientId && isForDelivery ? 'Pendiente de Entrega' : 'Adeuda')
+            : (selectedClientId && isForDelivery ? 'Pendiente de Entrega' : 'Pagada');
 
         const cuitCliente = (client.numeroDocumento || client.cuit || client.dni || '').replace(/\D/g, '');
 
@@ -554,8 +555,9 @@ const POS = () => {
             clienteCondicionIVA: client.condicionIva || 'CF',
             clienteTipoDoc: (cuitCliente.length === 11) ? 'CUIT' : 'DNI',
             estado: estadoVenta,
-            paymentMethod: 'contado',
-            facturaAfip: isAfipEnabled,
+            paymentMethod: esCuentaCorriente ? 'cuenta_corriente' : 'contado',
+            saldoPendiente: esCuentaCorriente ? total : 0,
+            facturaAfip: isAfipEnabled && !esCuentaCorriente,
             syncPendiente: !isOnline,
             afipLetra: (companyConfig?.taxCondition === 'MT')
                 ? 'C'
@@ -598,8 +600,16 @@ const POS = () => {
                 toast.warn("Venta guardada OFFLINE. Se sincronizará al reconectar.", { autoClose: 6000 });
             }
 
-            toast.success("Venta procesada!");
-            
+            toast.success(esCuentaCorriente ? `Guardado en cuenta corriente — ${client.nombre}.` : "Venta procesada!");
+
+            if (esCuentaCorriente) {
+                setCart([]);
+                setSelectedClientId('');
+                setIsForDelivery(false);
+                setIsPaymentModalOpen(false);
+                return;
+            }
+
             // 3. Si requiere factura AFIP/ARCA, llamar a la Cloud Function
             let saleForPDF = { ...saleData, id: finalSaleId };
 
@@ -787,15 +797,27 @@ const POS = () => {
                                 </div>
                             </div>
                             
-                            <button 
-                                disabled={cart.length === 0 || isSaving} 
-                                onClick={() => setIsPaymentModalOpen(true)} 
-                                className="flex-1 max-w-[200px] py-3.5 bg-amber-400 text-slate-900 font-black text-lg rounded-xl shadow-xl shadow-amber-400/10 active:scale-95 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:grayscale"
-                            >
-                                <CheckIcon className="w-5 h-5" />
-                                COBRAR
-                                <div className="bg-slate-900 text-white px-1.5 py-0.5 rounded text-[8px] font-black">F2</div>
-                            </button>
+                            <div className="flex gap-2 flex-shrink-0">
+                                {selectedClientId && (
+                                    <button
+                                        disabled={cart.length === 0 || !!isSaving}
+                                        onClick={() => handleConfirmPayment({ pagoEfectivo: 0, pagoTransferencia: 0, pagoTarjeta: 0, nroCupon: '', vuelto: 0, isAfipEnabled: false, esCuentaCorriente: true })}
+                                        className="py-3.5 px-3 bg-slate-700 text-white font-black text-[10px] rounded-xl active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-50 disabled:grayscale"
+                                    >
+                                        <Icono path="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" className="w-4 h-4" />
+                                        <span>CTA. CTE.</span>
+                                    </button>
+                                )}
+                                <button
+                                    disabled={cart.length === 0 || !!isSaving}
+                                    onClick={() => setIsPaymentModalOpen(true)}
+                                    className="py-3.5 px-5 bg-amber-400 text-slate-900 font-black text-lg rounded-xl shadow-xl shadow-amber-400/10 active:scale-95 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:grayscale"
+                                >
+                                    <CheckIcon className="w-5 h-5" />
+                                    COBRAR
+                                    <div className="bg-slate-900 text-white px-1.5 py-0.5 rounded text-[8px] font-black">F2</div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

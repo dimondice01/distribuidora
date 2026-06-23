@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase.js';
-import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc 
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import Button from './Button'; 
@@ -27,6 +29,11 @@ const PlusIcon = ({ className }) => <Icono className={className} path="M12 4.5v1
 const UserIcon = () => <Icono path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A1.5 1.5 0 0118 21.75H6.001c-.621 0-1.125-.504-1.125-1.125a1.5 1.5 0 01.624-1.507z" />;
 const EyeIcon = () => <Icono path="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" d2="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />;
 const XIcon = () => <Icono path="M6 18L18 6M6 6l12 12" />;
+const BankIcon = () => <Icono path="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />;
+const CheckCircleIcon = () => <Icono path="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />;
+const UsersIcon = () => <Icono path="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />;
+
+const formatCurrency = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(n || 0);
 
 // --- CONSTANTES AFIP ---
 const DOCUMENT_TYPES = [
@@ -64,6 +71,9 @@ function Clientes({ onViewDetail }) {
   const [editingCliente, setEditingCliente] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [deudaMap, setDeudaMap] = useState({});
+  const [filterDeuda, setFilterDeuda] = useState(false);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -83,8 +93,21 @@ function Clientes({ onViewDetail }) {
       setFilteredClientes(data);
     });
 
+    const ventasRef = collection(db, 'companies', tenantId, 'ventas');
+    const qDeuda = query(ventasRef, where('saldoPendiente', '>', 0));
+    const unsubDeuda = onSnapshot(qDeuda, (snap) => {
+      const deuda = {};
+      snap.docs.forEach(d => {
+        const v = d.data();
+        if (v.estado !== 'Anulada' && v.clienteId) {
+          deuda[v.clienteId] = (deuda[v.clienteId] || 0) + (v.saldoPendiente || 0);
+        }
+      });
+      setDeudaMap(deuda);
+    });
+
     return () => {
-        unsubRubros(); unsubZonas(); unsubListas(); unsubVend(); unsubClientes();
+        unsubRubros(); unsubZonas(); unsubListas(); unsubVend(); unsubClientes(); unsubDeuda();
     };
   }, [tenantId]);
   
@@ -94,6 +117,10 @@ function Clientes({ onViewDetail }) {
 
     if (filterZona) {
       results = results.filter(c => c.zonaId === filterZona);
+    }
+
+    if (filterDeuda) {
+      results = results.filter(c => (deudaMap[c.id] || 0) > 0);
     }
 
     if (searchTerm) {
@@ -108,9 +135,15 @@ function Clientes({ onViewDetail }) {
 
     if (sortConfig.key) {
       results = [...results].sort((a, b) => {
+        if (sortConfig.key === 'deuda') {
+          const dA = deudaMap[a.id] || 0;
+          const dB = deudaMap[b.id] || 0;
+          return sortConfig.direction === 'asc' ? dA - dB : dB - dA;
+        }
+
         let valA = a[sortConfig.key] || '';
         let valB = b[sortConfig.key] || '';
-        
+
         if (sortConfig.key === 'zonaId') {
           valA = zonas.find(z => z.id === a.zonaId)?.nombre || '';
           valB = zonas.find(z => z.id === b.zonaId)?.nombre || '';
@@ -130,7 +163,7 @@ function Clientes({ onViewDetail }) {
 
     setFilteredClientes(results);
     setCurrentPage(1);
-  }, [searchTerm, filterZona, sortConfig, clientes, zonas, vendedores]);
+  }, [searchTerm, filterZona, filterDeuda, sortConfig, clientes, zonas, vendedores, deudaMap]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -441,11 +474,14 @@ function Clientes({ onViewDetail }) {
       </div>
   );
 
+  const clientesConDeuda = clientes.filter(c => (deudaMap[c.id] || 0) > 0).length;
+  const totalDeudaGlobal = Object.values(deudaMap).reduce((sum, v) => sum + v, 0);
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
-      
+
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
             <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Cartera de Clientes</h2>
             <p className="text-slate-500 mt-1 font-medium">Gestión comercial y fiscal</p>
@@ -454,15 +490,45 @@ function Clientes({ onViewDetail }) {
             Nuevo Cliente
         </Button>
       </div>
-      
+
+      {/* MÉTRICAS RESUMEN */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500"><UsersIcon /></div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Clientes</p>
+            <p className="text-2xl font-black text-slate-800">{clientes.length}</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setFilterDeuda(f => !f)}
+          className={`rounded-2xl border shadow-sm px-5 py-4 flex items-center gap-4 transition-all text-left w-full ${filterDeuda ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200 hover:border-red-200 hover:bg-red-50/30'}`}
+        >
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${filterDeuda ? 'bg-red-100 text-red-500' : 'bg-red-50 text-red-400'}`}><BankIcon /></div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Con Deuda {filterDeuda && <span className="text-red-500">• Filtrado</span>}</p>
+            <p className={`text-2xl font-black ${clientesConDeuda > 0 ? 'text-red-600' : 'text-slate-800'}`}>{clientesConDeuda}</p>
+          </div>
+        </button>
+        <div className={`rounded-2xl border shadow-sm px-5 py-4 flex items-center gap-4 ${totalDeudaGlobal > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${totalDeudaGlobal > 0 ? 'bg-red-100 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+            {totalDeudaGlobal > 0 ? <BankIcon /> : <CheckCircleIcon />}
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Deuda Total C.C.</p>
+            <p className={`text-xl font-black ${totalDeudaGlobal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatCurrency(totalDeudaGlobal)}</p>
+          </div>
+        </div>
+      </div>
+
       {/* SEARCH BAR PREMIUM & FILTROS */}
       <div className="flex flex-col md:flex-row gap-3 mb-6">
         <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex-1">
           <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400"><SearchIcon /></span>
-              <input 
-                  type="text" 
-                  placeholder="Buscar cliente por nombre, dirección, barrio..." 
+              <input
+                  type="text"
+                  placeholder="Buscar por nombre, dirección, barrio..."
                   className="w-full pl-12 pr-4 py-3 bg-transparent border-none text-slate-700 font-medium placeholder-slate-400 focus:ring-0 outline-none text-lg"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -470,7 +536,7 @@ function Clientes({ onViewDetail }) {
           </div>
         </div>
 
-        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-64 flex items-center relative">
+        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-52 flex items-center relative">
             <select
                value={filterZona}
                onChange={(e) => setFilterZona(e.target.value)}
@@ -483,6 +549,14 @@ function Clientes({ onViewDetail }) {
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
             </div>
         </div>
+
+        <button
+          onClick={() => setFilterDeuda(f => !f)}
+          className={`px-5 py-3 rounded-2xl shadow-sm border font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${filterDeuda ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-600'}`}
+        >
+          <BankIcon />
+          {filterDeuda ? 'Ver Todos' : 'Con Deuda'}
+        </button>
       </div>
 
       {/* TABLA DE CLIENTES (TALLA GRANDE + ACCIONES VISIBLES) */}
@@ -536,7 +610,7 @@ function Clientes({ onViewDetail }) {
                     {sortConfig.key === 'condicionIva' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                   </div>
                 </th>
-                <th 
+                <th
                   className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
                   onClick={() => handleSort('listaPreciosAsignada')}
                 >
@@ -545,22 +619,34 @@ function Clientes({ onViewDetail }) {
                     {sortConfig.key === 'listaPreciosAsignada' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                   </div>
                 </th>
+                <th
+                  className="px-6 py-5 text-right text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  onClick={() => handleSort('deuda')}
+                >
+                  <div className="flex items-center justify-end gap-2">
+                    Saldo C.C.
+                    {sortConfig.key === 'deuda' && <span className="text-red-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </div>
+                </th>
                 <th className="px-6 py-5 text-right text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 rounded-tr-2xl">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {currentClientes.length === 0 ? (
-                <tr><td colSpan="7" className="p-10 text-center text-slate-400 italic">No se encontraron clientes.</td></tr>
+                <tr><td colSpan="8" className="p-10 text-center text-slate-400 italic">No se encontraron clientes.</td></tr>
               ) : (
                 currentClientes.map((cliente, index) => {
                   const isLast = index === currentClientes.length - 1;
+                  const saldoDeudor = deudaMap[cliente.id] || 0;
+                  const tieneDeuda = saldoDeudor > 0;
+                  const rowBg = tieneDeuda ? 'bg-red-50/30 group-hover:bg-red-50/60' : 'bg-white group-hover:bg-indigo-50/40';
                   return (
-                  <tr key={cliente.id} className="group hover:bg-indigo-50/40 transition-colors">
-                    
-                    {/* NOMBRE (Con avatar placeholder) */}
-                    <td className={`px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-l border-slate-200 ${isLast ? 'rounded-bl-2xl' : ''}`}>
+                  <tr key={cliente.id} className={`group transition-colors ${tieneDeuda ? 'border-l-4 border-l-red-400' : ''}`}>
+
+                    {/* NOMBRE */}
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-l border-slate-200 ${isLast ? 'rounded-bl-2xl' : ''}`}>
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-bold">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${tieneDeuda ? 'bg-red-100 border-red-300 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
                                 {cliente.nombre.charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -570,26 +656,26 @@ function Clientes({ onViewDetail }) {
                         </div>
                     </td>
 
-                    <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200">
                             {getZonaNombre(cliente.zonaId)}
                         </span>
                     </td>
 
-                    <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
                         <div className="flex flex-col">
                             <span className="text-sm font-semibold text-slate-700 truncate max-w-[180px]">{cliente.direccion}</span>
                             <span className="text-xs text-slate-400 mt-0.5">{cliente.localidad}</span>
                         </div>
                     </td>
 
-                    <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
                         <span className={`text-xs font-medium ${cliente.vendedorAsignadoId ? 'text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100' : 'text-slate-400 italic'}`}>
                             {getVendedorNombre(cliente.vendedorAsignadoId)}
                         </span>
                     </td>
 
-                    <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
                         <div className="flex flex-col">
                             {(cliente.requiereFacturaAfip ?? cliente.isArca) ? (
                                 <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit border border-indigo-200 mb-1 uppercase tracking-wider flex items-center gap-1">
@@ -614,7 +700,7 @@ function Clientes({ onViewDetail }) {
                         </div>
                     </td>
 
-                    <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
+                    <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
                         {cliente.listaPreciosAsignada ? (
                             <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100">{cliente.listaPreciosAsignada}</span>
                         ) : (
@@ -622,8 +708,27 @@ function Clientes({ onViewDetail }) {
                         )}
                     </td>
 
-                    {/* ACCIONES VISIBLES PERO SUTILES */}
-                    <td className={`px-6 py-5 text-right bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-r border-slate-200 ${isLast ? 'rounded-br-2xl' : ''}`}>
+                    {/* SALDO CUENTA CORRIENTE */}
+                    <td className={`px-6 py-5 text-right ${rowBg} transition-colors border-b border-slate-200`}>
+                        {tieneDeuda ? (
+                            <button
+                                onClick={() => onViewDetail(cliente.id)}
+                                className="inline-flex flex-col items-end group/saldo"
+                                title="Ver cuenta corriente"
+                            >
+                                <span className="text-sm font-black text-red-600 group-hover/saldo:underline">{formatCurrency(saldoDeudor)}</span>
+                                <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Adeuda</span>
+                            </button>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
+                                <CheckCircleIcon />
+                                Al día
+                            </span>
+                        )}
+                    </td>
+
+                    {/* ACCIONES */}
+                    <td className={`px-6 py-5 text-right ${rowBg} transition-colors border-b border-r border-slate-200 ${isLast ? 'rounded-br-2xl' : ''}`}>
                         <div className="flex items-center justify-end gap-2">
                             <button onClick={() => onViewDetail(cliente.id)} className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all" title="Ver Detalle">
                                 <EyeIcon />

@@ -1071,9 +1071,6 @@ function Facturacion() {
                             <option>Anulada</option>
                         </select>
                         <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"/>
-                        <Button onClick={handleOpenModalForCreate} icon={<PlusIcon />}>
-                            Nueva Venta
-                        </Button>
                     </div>
                 </div>
 

@@ -1,5 +1,6 @@
 // src/App.jsx
 import { useEffect } from 'react';
+import { auth } from './firebase.js';
 // 1. Importamos el Router
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; 
 import { toast } from 'react-toastify'; 
@@ -90,7 +91,10 @@ function AppContent() {
                     <p className="text-slate-500 font-medium leading-relaxed mb-6">
                         Tu cuenta no tiene una suscripción de empresa activa. Contacta al administrador de NOAR ERP.
                     </p>
-                    <button onClick={() => window.location.reload()} className="px-8 py-3 bg-slate-900 text-white font-bold rounded-2xl hover:bg-black transition-all">Reintentar</button>
+                    <div className="flex gap-3 justify-center">
+                        <button onClick={() => window.location.reload()} className="px-6 py-3 bg-slate-900 text-white font-bold rounded-2xl hover:bg-black transition-all">Reintentar</button>
+                        <button onClick={() => auth.signOut()} className="px-6 py-3 bg-red-50 text-red-600 font-bold rounded-2xl border border-red-200 hover:bg-red-100 transition-all">Cerrar Sesión</button>
+                    </div>
                     <p className="mt-4 text-xs font-mono text-slate-400">UID: {user.uid}</p>
                 </div>
             </div>
