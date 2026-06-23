@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Credenciales y secretos AFIP
+*secrets*.json
+afip_secrets.json
+*.pem
+*.key
+*.crt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -64,7 +64,15 @@ export const TenantProvider = ({ children }) => {
                             const unsubFiscal = onSnapshot(q, (snapshot) => {
                                 if (!snapshot.empty) {
                                     const afipData = snapshot.docs[0].data();
-                                    setCompanyConfig(prev => ({ ...prev, ...afipData }));
+                                    // Normalizar taxCondition: backend usa valores largos, frontend usa 'RI'/'MT'
+                                    const tc = afipData.taxCondition;
+                                    const normalized = {
+                                        ...afipData,
+                                        taxCondition: tc === 'RESPONSABLE_INSCRIPTO' ? 'RI'
+                                                    : tc === 'MONOTRIBUTO' ? 'MT'
+                                                    : tc
+                                    };
+                                    setCompanyConfig(prev => ({ ...prev, ...normalized }));
                                 }
                                 setLoading(false);
                             }, (err) => {
@@ -111,10 +119,12 @@ export const TenantProvider = ({ children }) => {
         logo: companyConfig?.logo || localStorage.getItem('company_logo')
     };
 
-    // Efecto para persistir TODO el config en LocalStorage (Blindaje Total)
+    // Efecto para persistir config en LocalStorage (excluye credenciales AFIP)
     useEffect(() => {
         if (companyConfig && Object.keys(companyConfig).length > 0) {
-            localStorage.setItem('company_config', JSON.stringify(companyConfig));
+            // cert y key no deben persistirse en disco — se recuperan del listener de Firestore al cargar
+            const { cert, key, ...configSafe } = companyConfig;
+            localStorage.setItem('company_config', JSON.stringify(configSafe));
             if (companyConfig.logo) {
                 localStorage.setItem('company_logo', companyConfig.logo); 
             }

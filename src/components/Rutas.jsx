@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
 import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy, deleteDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions'; 
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app';
 import { useFirestore } from '../hooks/useFirestore';
 import { useTenant } from '../contexts/TenantContext';
 import { toast } from 'react-toastify';
 import RouteMapMonitor from './RouteMapMonitor';
 
 // Inicializamos Cloud Functions
-const functions = getFunctions(); 
+const functions = getFunctions(getApp(), 'southamerica-west1');
 const emitirFacturas = httpsCallable(functions, 'emitirFacturasReparto');
 
 // --- ICONOGRAFÍA (Outline Premium) ---
@@ -593,7 +594,7 @@ function Rutas() {
                 
                 // DATOS CRÍTICOS PARA AFIP (Si la factura no los tiene, los sacamos del cliente)
                 // Esto asegura que la nube sepa qué hacer aunque la venta sea vieja
-                facturaAfip: invoice.facturaAfip ?? cliente?.isArca ?? false,
+                facturaAfip: invoice.facturaAfip ?? cliente?.requiereFacturaAfip ?? cliente?.isArca ?? false,
                 clienteCondicionIVA: invoice.clienteCondicionIVA ?? cliente?.condicionIva ?? 'CF',
                 clienteCuit: invoice.clienteCuit ?? cliente?.numeroDocumento ?? '',
                 // --- AUTOMATIZACIÓN FISCAL ---
@@ -601,7 +602,7 @@ function Rutas() {
                 companyInfo: config
             };
         });
-    }, [allInvoices, clientes]);
+    }, [allInvoices, clientes, config]);
 
     const pendingInvoices = useMemo(() => enrichedInvoices.filter(inv => inv.estado === 'Pendiente de Entrega'), [enrichedInvoices]);
     const repartidoresOnly = useMemo(() => {
@@ -645,8 +646,15 @@ function Rutas() {
         const facturasAfipParaProcesar = facturas.filter(inv => inv.facturaAfip === true && !inv.afipCAE);
         
         if (facturasAfipParaProcesar.length > 0) {
-            if (!config?.cuit || !config?.taxCondition || !config?.ptoVta) {
-                toast.error("❌ ERROR FISCAL: Configuración AFIP incompleta. Cargue CUIT/IVA en Integraciones.");
+            const missingFields = [];
+            if (!config?.cuit)         missingFields.push('CUIT');
+            if (!config?.taxCondition) missingFields.push('Condición IVA');
+            if (!config?.ptoVta)       missingFields.push('Punto de Venta');
+            if (!config?.cert)         missingFields.push('Certificado CRT');
+            if (!config?.key)          missingFields.push('Clave Privada');
+            if (!config?.active)       missingFields.push('ARCA deshabilitada');
+            if (missingFields.length > 0) {
+                toast.error(`❌ ERROR FISCAL: Falta en Integraciones → ${missingFields.join(', ')}`);
                 return;
             }
         }

@@ -122,7 +122,7 @@ export default function CatalogoPublico() {
         });
 
         // Cargar Nombre de Fantasía de Configuración
-        const qConfig = query(collection(db, 'companies', cId, 'config'), where('tipo', '==', 'afip'));
+        const qConfig = query(collection(db, 'companies', cId, 'config'), where('tipo', '==', 'branding'));
         const unsubConfig = onSnapshot(qConfig, (snap) => {
             if (!snap.empty) {
                 const configData = snap.docs[0].data();

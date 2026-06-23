@@ -54,7 +54,7 @@ function Clientes({ onViewDetail }) {
   const initialClientState = {
     nombre: '', telefono: '', direccion: '', barrio: '', localidad: '', email: '',
     rubroId: '', zonaId: '', listaPreciosAsignada: '', vendedorAsignadoId: '', 
-    isArca: false, condicionIva: 'CF', tipoDocumento: 'SC', numeroDocumento: '', dni: '',
+    isArca: false, requiereFacturaAfip: false, condicionIva: 'CF', tipoDocumento: 'SC', numeroDocumento: '', dni: '',
     lat: '', lng: '' 
   };
 
@@ -155,20 +155,30 @@ function Clientes({ onViewDetail }) {
   
   const handleNewClienteChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setNewCliente({ ...newCliente, [name]: type === 'checkbox' ? checked : value });
+    setNewCliente(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
   
+  const handleCondicionFiscal = (condicion, setData) => {
+    const map = {
+      CF: { isArca: false, requiereFacturaAfip: false, condicionIva: 'CF', tipoDocumento: 'SC', numeroDocumento: '' },
+      MT: { isArca: true,  requiereFacturaAfip: true,  condicionIva: 'MT', tipoDocumento: 'DNI', numeroDocumento: '' },
+      RI: { isArca: true,  requiereFacturaAfip: true,  condicionIva: 'RI', tipoDocumento: 'CUIT', numeroDocumento: '' },
+    };
+    setData(prev => ({ ...prev, ...map[condicion] }));
+  };
+
   const handleAddCliente = async (e) => {
     e.preventDefault();
     if (!newCliente.nombre.trim() || !newCliente.zonaId) { toast.error('Nombre y Zona son obligatorios.'); return; }
-    if (newCliente.isArca && (!newCliente.numeroDocumento || newCliente.tipoDocumento === 'SC')) {
-        toast.error('Complete datos fiscales.'); return;
+    if (newCliente.condicionIva === 'RI' && (!newCliente.numeroDocumento || newCliente.numeroDocumento.length !== 11)) {
+        toast.error('Para Resp. Inscripto el CUIT es obligatorio (11 dígitos sin guiones).'); return;
     }
     setIsSaving(true);
     try {
       await addTenantDoc('clientes', {
         ...newCliente,
         condicionIva: newCliente.isArca ? newCliente.condicionIva : 'CF',
+        requiereFacturaAfip: newCliente.requiereFacturaAfip ?? newCliente.isArca,
         activo: true,
         fechaCreacion: new Date()
       });
@@ -198,6 +208,7 @@ function Clientes({ onViewDetail }) {
       ...initialClientState, ...cliente, 
       zonaId: cliente.zonaId || '', listaPreciosAsignada: cliente.listaPreciosAsignada || '',
       vendedorAsignadoId: cliente.vendedorAsignadoId || '', isArca: cliente.isArca || false,
+      requiereFacturaAfip: cliente.requiereFacturaAfip ?? cliente.isArca ?? false,
       tipoDocumento: cliente.tipoDocumento || 'SC', numeroDocumento: cliente.numeroDocumento || '',
       lat: cliente.lat || '', lng: cliente.lng || ''
     });
@@ -206,16 +217,19 @@ function Clientes({ onViewDetail }) {
   
   const handleEditChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setEditingCliente({ ...editingCliente, [name]: type === 'checkbox' ? checked : value });
+    setEditingCliente(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
   
   const handleUpdateCliente = async (e) => {
     e.preventDefault();
     if (!editingCliente.nombre.trim() || !editingCliente.zonaId) { toast.error('Faltan datos.'); return; }
+    if (editingCliente.condicionIva === 'RI' && (!editingCliente.numeroDocumento || editingCliente.numeroDocumento.length !== 11)) {
+        toast.error('Para Resp. Inscripto el CUIT es obligatorio (11 dígitos sin guiones).'); return;
+    }
     setIsSaving(true);
     try {
       const { id, ...data } = editingCliente;
-      await updateTenantDoc('clientes', id, { ...data, condicionIva: data.isArca ? data.condicionIva : 'CF' });
+      await updateTenantDoc('clientes', id, { ...data, condicionIva: data.isArca ? data.condicionIva : 'CF', requiereFacturaAfip: data.requiereFacturaAfip ?? data.isArca });
       toast.success('Actualizado'); setIsEditModalOpen(false); setEditingCliente(null);
     } catch (error) {
       console.error(error); toast.error('Error al actualizar.');
@@ -225,7 +239,7 @@ function Clientes({ onViewDetail }) {
   };
 
   // --- RENDERIZADO DEL FORMULARIO (MODAL PREMIUM) ---
-  const renderFormFields = (data, handleChange) => (
+  const renderFormFields = (data, handleChange, setData) => (
       <div className="space-y-6">
         {/* SECCIÓN 1: DATOS PERSONALES & UBICACIÓN */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -329,60 +343,97 @@ function Clientes({ onViewDetail }) {
             </div>
 
             {/* FISCAL */}
-            <div className={`p-5 rounded-2xl border shadow-sm transition-all duration-300 ${data.requiereFacturaAfip ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-100'}`}>
-                <div className="flex justify-between items-center mb-4">
-                    <h4 className={`text-xs font-bold uppercase tracking-wider ${data.isArca ? 'text-indigo-500' : 'text-slate-400'}`}>Datos Fiscales</h4>
-                    <label className="flex items-center cursor-pointer group">
-                        <div className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${data.isArca ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${data.isArca ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                        </div>
-                        <input type="checkbox" name="isArca" checked={data.isArca} onChange={handleChange} className="hidden" />
-                        <span className={`ml-2 text-xs font-bold transition-colors ${data.isArca ? 'text-indigo-700' : 'text-slate-500'}`}>Factura A</span>
-                    </label>
+            <div className="p-5 rounded-2xl border border-slate-100 shadow-sm bg-white">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Condición Fiscal (ARCA)</h4>
+
+                {/* Pills de condición */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                    {[
+                        { id: 'CF', label: 'Consumidor Final', activeClass: 'border-slate-500 bg-slate-100 text-slate-700' },
+                        { id: 'MT', label: 'Monotributo',      activeClass: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                        { id: 'RI', label: 'Resp. Inscripto',  activeClass: 'border-indigo-500 bg-indigo-50 text-indigo-700' },
+                    ].map(({ id, label, activeClass }) => {
+                        const active = id === 'CF' ? !data.isArca : (data.isArca && data.condicionIva === id);
+                        return (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={() => handleCondicionFiscal(id, setData)}
+                                className={`py-2 px-2 rounded-xl text-xs font-bold border-2 transition-all text-center ${active ? activeClass : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-500'}`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
 
-                {data.requiereFacturaAfip ? (
-                    <div className="space-y-4 animate-fade-in-up">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Condición IVA</label>
-                                <select 
-                                    name="condicionIva" value={data.condicionIva} 
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        handleChange({ target: { name: 'condicionIva', value: val }});
-                                        if (val === 'RI' && !data.isArca) {
-                                            handleChange({ target: { name: 'isArca', value: true, type: 'checkbox', checked: true }});
-                                        }
-                                    }}
-                                    className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                >
-                                    <option value="RI">Resp. Inscripto</option>
-                                    <option value="MT">Monotributo</option>
-                                    <option value="EX">Exento</option>
-                                    <option value="NR">No Responsable</option>
-                                    <option value="CF">Cons. Final (Registrado)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Tipo Doc</label>
-                                <select name="tipoDocumento" value={data.tipoDocumento} onChange={handleChange} className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
-                                    {DOCUMENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                                </select>
-                            </div>
+                {/* Switch independiente de facturación ARCA */}
+                <button
+                    type="button"
+                    onClick={() => setData(prev => ({ ...prev, requiereFacturaAfip: !prev.requiereFacturaAfip }))}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all mb-3 ${
+                        data.requiereFacturaAfip
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-400'
+                    }`}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-5 rounded-full transition-all relative ${data.requiereFacturaAfip ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${data.requiereFacturaAfip ? 'left-5' : 'left-0.5'}`}/>
                         </div>
-                        <div>
-                            <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">Número / CUIT</label>
-                            <input type="text" name="numeroDocumento" value={data.numeroDocumento} onChange={handleChange} className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sin guiones"/>
+                        <div className="text-left">
+                            <p className="text-xs font-black uppercase tracking-wider leading-none">Facturación ARCA activa</p>
+                            <p className="text-[10px] mt-0.5 font-medium">
+                                {data.requiereFacturaAfip ? 'Se emitirán facturas fiscales para este cliente' : 'Sin fiscalización — ticket simplificado'}
+                            </p>
                         </div>
                     </div>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${data.requiereFacturaAfip ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                        {data.requiereFacturaAfip ? 'ACTIVO' : 'INACTIVO'}
+                    </span>
+                </button>
+
+                {/* Aviso para condiciones no estándar (EX, NR) */}
+                {data.isArca && !['RI', 'MT'].includes(data.condicionIva) && (
+                    <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mb-3">
+                        Condición actual: <span className="font-bold">{data.condicionIva}</span> — seleccioná una opción para cambiarla.
+                    </p>
+                )}
+
+                {/* Campo de documento según condición */}
+                {!data.isArca ? (
+                    <div>
+                        <p className="text-[10px] text-slate-400 italic mb-2">Facturación simplificada — sin datos ARCA.</p>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">DNI (uso interno, opcional)</label>
+                        <input
+                            type="text" name="dni" value={data.dni} onChange={handleChange}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none"
+                            placeholder="Opcional"
+                        />
+                    </div>
+                ) : data.condicionIva === 'RI' ? (
+                    <div>
+                        <label className="block text-[10px] font-bold text-indigo-700 mb-1 uppercase">CUIT *</label>
+                        <input
+                            type="text" name="numeroDocumento" value={data.numeroDocumento} onChange={handleChange}
+                            maxLength={11}
+                            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${data.numeroDocumento && data.numeroDocumento.length !== 11 ? 'border-red-300 bg-red-50' : 'border-indigo-200 bg-indigo-50'}`}
+                            placeholder="Sin guiones (11 dígitos)"
+                        />
+                        {data.numeroDocumento && data.numeroDocumento.length !== 11 && (
+                            <p className="text-[10px] text-red-500 mt-1">El CUIT debe tener exactamente 11 dígitos.</p>
+                        )}
+                        <p className="text-[10px] text-indigo-500 mt-1 font-semibold">Emite Factura A</p>
+                    </div>
                 ) : (
-                    <div className="space-y-4">
-                        <p className="text-[10px] text-slate-400 italic">El cliente será tratado como Consumidor Final (CF) para facturación simplificada.</p>
-                        <div>
-                            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">DNI (Uso Interno)</label>
-                            <input type="text" name="dni" value={data.dni} onChange={handleChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none"/>
-                        </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-emerald-700 mb-1 uppercase">DNI (opcional)</label>
+                        <input
+                            type="text" name="numeroDocumento" value={data.numeroDocumento} onChange={handleChange}
+                            className="w-full px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+                            placeholder="DNI sin guiones"
+                        />
+                        <p className="text-[10px] text-emerald-600 mt-1 font-semibold">Emite Factura B</p>
                     </div>
                 )}
             </div>
@@ -540,10 +591,14 @@ function Clientes({ onViewDetail }) {
 
                     <td className="px-6 py-5 bg-white group-hover:bg-indigo-50/40 transition-colors border-b border-slate-200">
                         <div className="flex flex-col">
-                            {cliente.isArca ? (
-                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100 mb-1 uppercase tracking-tighter">FACTURA {cliente.condicionIva === 'RI' ? 'A' : 'B'}</span>
+                            {(cliente.requiereFacturaAfip ?? cliente.isArca) ? (
+                                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit border border-indigo-200 mb-1 uppercase tracking-wider flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block"></span>ARCA ACTIVO
+                                </span>
                             ) : (
-                                <span className="text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-0.5 rounded w-fit border border-slate-100 mb-1 tracking-tighter uppercase whitespace-nowrap">CONSUMIDOR FINAL</span>
+                                <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full w-fit border border-slate-200 mb-1 uppercase tracking-wider flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 inline-block"></span>SIN ARCA
+                                </span>
                             )}
                             <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
@@ -607,7 +662,7 @@ function Clientes({ onViewDetail }) {
             </div>
             <div className="overflow-y-auto p-8 custom-scrollbar bg-slate-50">
                 <form onSubmit={handleAddCliente}>
-                    {renderFormFields(newCliente, handleNewClienteChange)}
+                    {renderFormFields(newCliente, handleNewClienteChange, setNewCliente)}
                     <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 mt-6">
                         {/* --- BOTONES ACTUALIZADOS --- */}
                         <Button variant="secondary" onClick={closeNewModal}>Cancelar</Button>
@@ -629,7 +684,7 @@ function Clientes({ onViewDetail }) {
             </div>
             <div className="overflow-y-auto p-8 custom-scrollbar bg-slate-50">
                 <form onSubmit={handleUpdateCliente}>
-                    {renderFormFields(editingCliente, handleEditChange)}
+                    {renderFormFields(editingCliente, handleEditChange, setEditingCliente)}
                     <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 mt-6">
                         {/* --- BOTONES ACTUALIZADOS --- */}
                         <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>

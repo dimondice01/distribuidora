@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, addDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app';
 import { db } from '../firebase'; 
 import { useFirestore } from '../hooks/useFirestore';
 import forge from 'node-forge';
@@ -112,18 +113,22 @@ const IntegrationsPage = () => {
         if (!tenantId) return;
         setLoading(true);
         try {
-            // Usamos la colección unificada 'config' filtrando por tipo dentro del tenant
-            const q = query(
-                getTenantCollection('config'), 
-                where('tipo', '==', 'afip'), 
-                limit(1)
-            );
-            const snap = await getDocs(q);
-            
-            if (!snap.empty) {
-                const docSnap = snap.docs[0];
-                const data = docSnap.data();
-                setConfigDocId(docSnap.id);
+            // Intentar por ID fijo 'afip' primero (requerido por afip-service CF)
+            const directSnap = await getDoc(doc(db, 'companies', tenantId, 'config', 'afip'));
+            let data = null;
+            if (directSnap.exists()) {
+                data = directSnap.data();
+                setConfigDocId('afip');
+            } else {
+                // Fallback: query por campo tipo (docs con ID autogenerado de versiones anteriores)
+                const q = query(getTenantCollection('config'), where('tipo', '==', 'afip'), limit(1));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    data = snap.docs[0].data();
+                    setConfigDocId(snap.docs[0].id);
+                }
+            }
+            if (data) {
                 setConfig({
                     cuit: data.cuit || '',
                     ptoVta: data.ptoVta || 1,
@@ -131,7 +136,9 @@ const IntegrationsPage = () => {
                     isProduction: data.isProduction || false,
                     cert: data.cert || '',
                     key: data.key || '',
-                    taxCondition: data.taxCondition || 'RI',
+                    taxCondition: data.taxCondition === 'RESPONSABLE_INSCRIPTO' ? 'RI'
+                                : data.taxCondition === 'MONOTRIBUTO' ? 'MT'
+                                : (data.taxCondition || 'RI'),
                     active: data.active || false
                 });
             }
@@ -194,44 +201,83 @@ const IntegrationsPage = () => {
         }
     };
 
+    const validateConfig = () => {
+        if (!config.cuit || !/^\d{11}$/.test(config.cuit)) {
+            toast.error('CUIT inválido: debe tener exactamente 11 dígitos numéricos sin guiones.');
+            return false;
+        }
+        if (!config.ptoVta || Number(config.ptoVta) < 1) {
+            toast.error('Punto de Venta debe ser un número mayor a 0.');
+            return false;
+        }
+        if (!['RI', 'MT'].includes(config.taxCondition)) {
+            toast.error('Condición IVA debe ser Responsable Inscripto (RI) o Monotributista (MT).');
+            return false;
+        }
+        if (config.cert && !config.cert.includes('-----BEGIN CERTIFICATE-----')) {
+            toast.error('El certificado CRT no es válido. Debe comenzar con -----BEGIN CERTIFICATE-----');
+            return false;
+        }
+        if (config.key && !config.key.includes('-----BEGIN')) {
+            toast.error('La clave privada no tiene el formato PEM correcto.');
+            return false;
+        }
+        if (config.cert && !config.key) toast.warn('Tiene certificado pero falta la clave privada. La facturación AFIP no funcionará.');
+        if (!config.cert && config.key) toast.warn('Tiene clave privada pero falta el certificado CRT. La facturación AFIP no funcionará.');
+        return true;
+    };
+
     const handleSave = async () => {
         if (!tenantId) return;
+        if (!validateConfig()) return;
         setLoading(true);
         try {
-            const finalData = { 
-                ...config, 
-                companyId: tenantId, 
+            // El backend (Cloud Function) espera los valores largos de taxCondition
+            const taxConditionBackend = config.taxCondition === 'RI' ? 'RESPONSABLE_INSCRIPTO'
+                : config.taxCondition === 'MT' ? 'MONOTRIBUTO'
+                : config.taxCondition;
+
+            const finalData = {
+                ...config,
+                taxCondition: taxConditionBackend,
+                companyId: tenantId,
                 tipo: 'afip',
-                updatedAt: new Date() 
+                updatedAt: new Date()
             };
-            
-            if (configDocId) {
-                await updateTenantDoc('config', configDocId, finalData);
-            } else {
-                const newDocRef = await addTenantDoc('config', finalData);
-                setConfigDocId(newDocRef.id);
-            }
-            
+
+            // ID fijo 'afip' — requerido por afip-service CF (.doc('afip').get())
+            await setDoc(doc(db, 'companies', tenantId, 'config', 'afip'), finalData, { merge: true });
+            setConfigDocId('afip');
+
+            // Doc público de branding con ID fijo 'branding' (sin credenciales)
+            const brandingData = {
+                tipo: 'branding',
+                nombreFantasia: config.nombreFantasia || '',
+                razonSocial: config.razonSocial || '',
+                companyId: tenantId,
+                updatedAt: new Date()
+            };
+            await setDoc(doc(db, 'companies', tenantId, 'config', 'branding'), brandingData, { merge: true });
+
             setUnsavedChanges(false);
             setTestResult(null);
-            alert("✅ Configuración de AFIP guardada correctamente.");
+            toast.success('Configuración AFIP guardada correctamente.');
         } catch (e) {
             console.error("Error saving AFIP config:", e);
-            alert("Error al guardar: " + e.message);
+            toast.error('Error al guardar: ' + e.message);
         } finally {
             setLoading(false);
         }
     };
 
     const handleTest = async () => {
-        if (unsavedChanges) return alert("⚠️ Tienes cambios sin guardar. Guarda primero.");
+        if (unsavedChanges) { toast.warn('Hay cambios sin guardar. Guardá primero.'); return; }
         
         setTesting(true);
         setTestResult(null);
         try {
-            const functions = getFunctions();
-            // Asegúrate de que el nombre coincida con tu export en functions/index.js
-            const probar = httpsCallable(functions, 'probarConexionAfip'); 
+            const functions = getFunctions(getApp(), 'southamerica-west1');
+            const probar = httpsCallable(functions, 'probarConexionAfip');
             const { data } = await probar();
             setTestResult(data);
         } catch (e) {

@@ -12,7 +12,7 @@ import { useTenant } from '../contexts/TenantContext';
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 
 // Inicializamos Cloud Functions
-const functions = getFunctions(app);
+const functions = getFunctions(app, 'southamerica-west1');
 const emitirFacturaCloud = httpsCallable(functions, 'emitirFacturasReparto');
 
 // --- ICONOGRAFÍA PREMIUM (Stroke 1.5, Rounded) ---
@@ -133,20 +133,21 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                 .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; border-radius: 8px; }
                 
                 /* HEADER STYLES */
-                .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
-                .company-info { width: 50%; }
-                
+                .header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+                .company-info { min-width: 0; }
+
                 /* DINAMIC BRANDING */
-                .logo-container { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
-                .logo-img { max-height: 60px; max-width: 200px; object-fit: contain; }
-                .logo-placeholder { width: 50px; height: 50px; background-color: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 24px; }
+                .logo-container { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+                .logo-img { max-height: 90px; max-width: 260px; object-fit: contain; display: block; }
+                .logo-placeholder { width: 50px; height: 50px; background-color: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 24px; flex-shrink: 0; }
                 .company-name-text { font-size: 20px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: -0.5px; }
-                
-                .letter-box { width: 50px; height: 55px; border: 2px solid #333; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; margin-bottom: 5px; }
-                .letter { font-size: 32px; font-weight: 900; line-height: 1; }
+
+                .letter-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+                .letter-box { width: 60px; height: 65px; border: 2px solid #333; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; margin-bottom: 4px; }
+                .letter { font-size: 36px; font-weight: 900; line-height: 1; }
                 .letter-code { font-size: 9px; font-weight: bold; }
-                
-                .invoice-data { text-align: right; width: 40%; }
+
+                .invoice-data { flex: 1; text-align: right; }
                 .client-info { background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
                 
                 table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
@@ -172,25 +173,27 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                             `}
                         </div>
                         <p style="margin: 0; font-size: 11px; font-weight: 500;">
-                            <strong>${co.name || companyName}</strong><br>
+                            <strong>${co.razonSocial || co.name || companyName}</strong><br>
                             ${companyAddress}<br>
-                            Condición IVA: ${taxType}<br>
-                            ${co.iibb ? `Ingresos Brutos: ${co.iibb}<br>` : ''}
-                            ${co.inicioActividades ? `Inicio de Actividades: ${co.inicioActividades}` : ''}
+                            Condición IVA: ${taxType}
                         </p>
                     </div>
-                    
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-right: 20px;">
+
+                    <div class="letter-col">
                         <div class="letter-box">
                             <div class="letter">${letra}</div>
                             <div class="letter-code">${codComprobante}</div>
                         </div>
-                        ${!tieneCAE ? '<div class="legal-notice">No válido como factura</div>' : ''}
+                        ${!tieneCAE ? '<div class="legal-notice" style="text-align:center;">No válido como factura</div>' : ''}
+                        <div style="margin-top: 5px; text-align: center; font-size: 9px; font-weight: 600; color: #333; line-height: 1.7;">
+                            ${co.iibb ? `<div>Ing. Brutos:<br>${co.iibb}</div>` : ''}
+                            ${co.inicioActividades ? `<div style="margin-top:3px;">Inicio Act.:<br>${co.inicioActividades}</div>` : ''}
+                        </div>
                     </div>
 
                     <div class="invoice-data">
-                        <h2 style="margin: 0 0 10px 0; color: #1e293b; font-size: 24px; font-weight: 900;">${tituloComprobante}</h2>
-                        <p style="font-size: 12px; line-height: 1.6; font-weight: 600;">
+                        <h2 style="margin: 0 0 8px 0; color: #1e293b; font-size: 22px; font-weight: 900;">${tituloComprobante}</h2>
+                        <p style="margin: 0; font-size: 12px; line-height: 1.7; font-weight: 600;">
                             <span style="color: #64748b;">Número:</span> ${ptoVtaStr}-${numCompStr}<br>
                             <span style="color: #64748b;">Fecha:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
                             <span style="color: #64748b;">CUIT:</span> ${companyCuit}
@@ -206,7 +209,7 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 2px;">CUIT / DNI</span>
-                            <strong>${venta.clienteCuit || clientDetails.cuit || clientDetails.dni || 'S/D'}</strong>
+                            <strong>${venta.clienteCuit || clientDetails.numeroDocumento || clientDetails.cuit || clientDetails.dni || 'S/D'}</strong>
                         </div>
                     </div>
                     <div style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
@@ -214,7 +217,7 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                         <span style="font-size: 11px; font-weight: 600;">${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
                         <span style="margin: 0 10px; color: #cbd5e1;">|</span>
                         <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Cond. IVA:</span> 
-                        <span style="font-size: 11px; font-weight: 600;">${venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : 'Consumidor Final'}</span>
+                        <span style="font-size: 11px; font-weight: 600;">${venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : venta.clienteCondicionIVA === 'MT' ? 'Monotributista' : 'Consumidor Final'}</span>
                     </div>
                 </div>
 
@@ -387,6 +390,11 @@ function Facturacion() {
     useEffect(() => {
         if (!tenantId) return;
 
+        // Clientes en tiempo real — necesario para leer CUIT/condición actualizada al facturar
+        const unsubClientes = onTenantSnapshot('clientes', (snapshot) => {
+            setClientes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.activo !== false));
+        });
+
         // Carga de ventas filtrada por Tenant
         const unsubscribe = onTenantSnapshot('ventas', (snapshot) => {
             const docs = snapshot.docs.map(doc => ({ 
@@ -406,18 +414,16 @@ function Facturacion() {
         const fetchInitialData = async () => {
             try {
                 // Usamos getTenantCollection para filtrar por compañía
-                const [productsSnap, vendorsSnap, categoriesSnap, clientsSnap, zonasSnap, listsSnap] = await Promise.all([
-                    getDocs(getTenantCollection('productos')), 
+                const [productsSnap, vendorsSnap, categoriesSnap, zonasSnap, listsSnap] = await Promise.all([
+                    getDocs(getTenantCollection('productos')),
                     getDocs(getTenantCollection('vendedores')),
-                    getDocs(getTenantCollection('categorias')), 
-                    getDocs(getTenantCollection('clientes')), 
-                    getDocs(getTenantCollection('zonas')), 
+                    getDocs(getTenantCollection('categorias')),
+                    getDocs(getTenantCollection('zonas')),
                     getDocs(getTenantCollection('listas_precios'))
                 ]);
                 setProductos(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setVendedores(vendorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setCategorias(categoriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                setClientes(clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setZonas(zonasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setPriceLists(listsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             } catch (err) { 
@@ -426,7 +432,7 @@ function Facturacion() {
             }
         };
         fetchInitialData();
-        return () => unsubscribe();
+        return () => { unsubscribe(); unsubClientes(); };
     }, [tenantId]);
     
     const filteredClients = useMemo(() => {
@@ -585,7 +591,7 @@ function Facturacion() {
         const client = clientes.find(c => c.id === clientId);
         if (!client) return;
         const listaAsignada = client.listaPreciosAsignada || '';
-        setNewInvoice(prev => ({ ...prev, clienteId: client.id, clienteNombre: client.nombre || client.nombreCompleto || 'Cliente Sin Nombre', listaPreciosId: listaAsignada, facturaAfip: client.isArca || false, items: [] }));
+        setNewInvoice(prev => ({ ...prev, clienteId: client.id, clienteNombre: client.nombre || client.nombreCompleto || 'Cliente Sin Nombre', listaPreciosId: listaAsignada, facturaAfip: client.requiereFacturaAfip ?? client.isArca ?? false, items: [] }));
         if (listaAsignada) toast.info(`Lista de precios "${listaAsignada}" aplicada.`);
         setClientSearchTerm('');
         setClientDropdownOpen(false);
@@ -752,15 +758,20 @@ function Facturacion() {
             const zonaNombre = getZonaNombre(clientDetails.zonaId);
             
             // Inyectamos la info de empresa para el PDF (Snapshot) con MERGE DEFENSIVO
-            const saleWithInfo = { 
-                ...saleForPDF, 
-                companyInfo: { 
-                    logo: globalLogo || companyConfig?.logo, 
-                    nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name, 
+            const saleWithInfo = {
+                ...saleForPDF,
+                companyInfo: {
+                    logo: globalLogo || companyConfig?.logo,
+                    name: companyConfig?.name,
+                    nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name,
+                    razonSocial: companyConfig?.razonSocial,
                     domicilioFiscal: companyConfig?.domicilioFiscal,
                     taxCondition: companyConfig?.taxCondition,
-                    cuit: companyConfig?.cuit
-                } 
+                    cuit: companyConfig?.cuit,
+                    iibb: companyConfig?.iibb,
+                    inicioActividades: companyConfig?.inicioActividades,
+                    ptoVta: companyConfig?.ptoVta,
+                }
             };
             
             printInvoicePDF(saleWithInfo, clientDetails, zonaNombre);
@@ -844,16 +855,21 @@ function Facturacion() {
         const robustVendedorNombre = venta.vendedorNombre || vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto || 'N/A';
         
         // Inyectamos la info de empresa para el PDF (Snapshot) en reimpresión
-        const saleToPrint = { 
-            ...venta, 
-            clienteNombre: robustClienteNombre, 
+        const saleToPrint = {
+            ...venta,
+            clienteNombre: robustClienteNombre,
             vendedorNombre: robustVendedorNombre,
-            companyInfo: { 
-                logo: globalLogo || companyConfig?.logo || (venta.companyInfo?.logo), 
-                nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name || venta.companyInfo?.nombreFantasia, 
+            companyInfo: {
+                logo: globalLogo || companyConfig?.logo || venta.companyInfo?.logo,
+                name: companyConfig?.name || venta.companyInfo?.name,
+                nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name || venta.companyInfo?.nombreFantasia,
+                razonSocial: companyConfig?.razonSocial || venta.companyInfo?.razonSocial,
                 domicilioFiscal: companyConfig?.domicilioFiscal || venta.companyInfo?.domicilioFiscal,
                 taxCondition: companyConfig?.taxCondition || venta.companyInfo?.taxCondition,
-                cuit: companyConfig?.cuit || venta.companyInfo?.cuit
+                cuit: companyConfig?.cuit || venta.companyInfo?.cuit,
+                iibb: companyConfig?.iibb || venta.companyInfo?.iibb,
+                inicioActividades: companyConfig?.inicioActividades || venta.companyInfo?.inicioActividades,
+                ptoVta: companyConfig?.ptoVta || venta.companyInfo?.ptoVta,
             }
         };
         printInvoicePDF(saleToPrint, clientDetails, zonaNombre);

@@ -276,11 +276,6 @@ const formatDate = (timestamp) => {
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-};
-
-
 function ClienteDetalle({ clienteId, onBack }) {
     const { tenantId, onTenantSnapshot, getTenantDoc, getTenantCollection, updateTenantDoc } = useFirestore();
     const { companyConfig } = useTenant(); 
@@ -534,7 +529,7 @@ function ClienteDetalle({ clienteId, onBack }) {
                                         const newVal = e.target.checked;
                                         setCliente(prev => ({ ...prev, isArca: newVal }));
                                         try {
-                                            await updateTenantDoc('clientes', cliente.id, { isArca: newVal, condicionIva: newVal ? (cliente.condicionIva || 'CF') : 'CF' });
+                                            await updateTenantDoc('clientes', cliente.id, { isArca: newVal, requiereFacturaAfip: newVal, condicionIva: newVal ? (cliente.condicionIva || 'CF') : 'CF' });
                                             toast.success(`Facturación ${newVal ? 'Activada' : 'Desactivada'}`);
                                         } catch (err) { toast.error("Error al actualizar"); }
                                     }} 
