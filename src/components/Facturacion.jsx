@@ -14,6 +14,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 // Inicializamos Cloud Functions
 const functions = getFunctions(app, 'southamerica-west1');
 const emitirFacturaCloud = httpsCallable(functions, 'emitirFacturasReparto');
+const emitirNCCloud = httpsCallable(functions, 'emitirNotaCredito');
 
 // --- ICONOGRAFÍA PREMIUM (Stroke 1.5, Rounded) ---
 const Icono = ({ path, d2, className = "w-5 h-5" }) => (
@@ -28,6 +29,8 @@ const PrintIcon = () => <Icono path="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.0
 const DollarSignIcon = () => <Icono path="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-6 h-6"/>;
 const BarChartIcon = () => <Icono path="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" className="w-6 h-6"/>;
 const TrashIcon = () => <Icono path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456-1.278A11.862 11.862 0 0020.62 6m-14.456.374a11.862 11.862 0 00-.87 5.143" />;
+const ArcaIcon = () => <Icono path="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />;
+const NCIcon = () => <Icono path="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />;
 const BarcodeIcon = (props) => <Icono path="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" d2="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />;
 const XIcon = () => <Icono path="M6 18L18 6M6 6l12 12" />;
 const SearchIcon = () => <Icono path="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />;
@@ -117,150 +120,176 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
 
     const tieneCAE = !!venta.afipCAE;
     const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
+    const esFacturaA = letra === 'A';
     const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
     const ptoVtaStr = String(config.ptoVta || '00001').padStart(5, '0');
     const numCompStr = String(venta.afipNumeroComprobante || venta.id?.substring(0, 8) || '0').padStart(8, '0');
+
+    const formatCuit = (val) => {
+        const c = String(val || '').replace(/\D/g, '');
+        if (c.length === 11) return `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}`;
+        return val || 'S/D';
+    };
+    const condicionVenta = (venta.saldoPendiente !== undefined && venta.saldoPendiente <= 0.01)
+        ? ((venta.pagoTarjeta || 0) > 0 ? 'Tarjeta' : 'Contado')
+        : 'Cuenta Corriente';
 
     const qrUrl = getAfipQrUrl(venta, config);
     const condIvaTexto = venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : venta.clienteCondicionIVA === 'MT' ? 'Monotributo' : 'Cons. Final';
     const vtoCaeFormateado = formatAfipDate(venta.afipFechaVtoCAE);
     const isRI = config.taxCondition === 'RI' || config.taxCondition === 'RESPONSABLE_INSCRIPTO';
 
-    const itemsHtml = (venta.items || []).map(item => `
-        <tr style="border-bottom: 1px solid #ccc;">
-            <td style="padding: 4px 5px; font-size: 10px;">${item.nombre}</td>
-            <td style="padding: 4px 5px; text-align: center; font-size: 10px;">${item.quantity}</td>
-            <td style="padding: 4px 5px; text-align: right; font-size: 10px;">${formatCurrency(item.precio)}</td>
-            <td style="padding: 4px 5px; text-align: right; font-size: 10px; font-weight: bold;">${formatCurrency(item.quantity * item.precio)}</td>
-        </tr>
-    `).join('');
+    const itemsHtml = (venta.items || []).map((item, idx) => {
+        const precioUnit = esFacturaA ? item.precio / 1.21 : item.precio;
+        const subtotal = esFacturaA ? (item.precio * item.quantity) / 1.21 : item.precio * item.quantity;
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        return `
+        <tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 5px 8px; font-size: 10px; color: #334155;">${item.nombre}</td>
+            <td style="padding: 5px 5px; text-align: center; font-size: 9px; width: 30px; color: #94a3b8;">u.</td>
+            <td style="padding: 5px 5px; text-align: center; font-size: 10px; width: 40px; color: #334155;">${item.quantity}</td>
+            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; color: #334155;">${formatCurrency(precioUnit)}</td>
+            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; font-weight: 700; color: #0f172a;">${formatCurrency(subtotal)}</td>
+        </tr>`;
+    }).join('');
 
     const bloquePie = tieneCAE ? `
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <div><img src="${qrUrl}" alt="QR AFIP" style="width: 80px; height: 80px; display: block; border: 1px solid #000;"></div>
-            <div style="font-size: 10px; font-weight: bold; line-height: 1.4;">
-                <span style="font-size: 12px; font-style: italic;">Comprobante autorizado por AFIP</span><br>
-                CAE: ${venta.afipCAE}<br>
-                Vto. CAE: ${vtoCaeFormateado}
+        <div style="display: flex; gap: 14px; align-items: flex-start;">
+            <div>
+                <img src="${qrUrl}" alt="QR AFIP" style="width: 90px; height: 90px; display: block; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <div style="text-align: center; margin-top: 3px; font-size: 7.5px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
+            </div>
+            <div style="font-size: 9px; color: #1e293b; line-height: 1.7;">
+                <div style="font-size: 10px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Comprobante Autorizado por ARCA</div>
+                <div><span style="color:#64748b;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
+                <div><span style="color:#64748b;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
             </div>
         </div>
     ` : `
-        <div style="border: 1px dashed #999; padding: 5px; text-align: center; background: #eee;">
-            <strong style="font-size: 10px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
+        <div style="border: 1px dashed #94a3b8; padding: 8px; text-align: center; background: #f8fafc; border-radius: 4px;">
+            <strong style="font-size: 10px; color: #64748b; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
         </div>
     `;
 
     const invoiceHtml = `
-    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #000; background: #fff; color: #000; position: relative;">
+    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
 
-        <div style="border-bottom: 1px solid #000; height: 120px; position: relative; overflow: hidden;">
+        <div style="text-align: right; padding: 4px 10px 0; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">ORIGINAL</div>
 
-            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 60px; height: 60px; border-left: 1px solid #000; border-right: 1px solid #000; border-bottom: 1px solid #000; background: #fff; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1;">
-                <div style="font-size: 32px; font-weight: bold; line-height: 1;">${letra}</div>
-                <div style="font-size: 9px; margin-top: 2px;">${codComprobante}</div>
+        <div style="border-bottom: 1px solid #cbd5e1; min-height: 120px; position: relative; overflow: hidden;">
+
+            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 68px; min-height: 68px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background: #1e293b; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1;">
+                <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
+                <div style="font-size: 8px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
             </div>
-            <div style="position: absolute; left: 50%; top: 60px; bottom: 0; border-left: 1px solid #000;"></div>
+            <div style="position: absolute; left: 50%; top: 68px; bottom: 0; border-left: 1px solid #cbd5e1;"></div>
 
             <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    ${config.logo ? `<img src="${config.logo}" alt="Logo" style="max-height: 50px; max-width: 180px; object-fit: contain; object-position: left;">` : `
-                        <div style="width: 35px; height: 35px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 20px; flex-shrink: 0;">
-                            ${(config.nombreFantasia || config.name || 'D')[0].toUpperCase()}
-                        </div>
-                        <div style="font-size: 18px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -1px;">
-                            ${config.nombreFantasia || config.name || ''}
-                        </div>
-                    `}
+                <div style="margin-bottom: 6px;">
+                    ${config.logo
+                        ? `<img src="${config.logo}" alt="Logo" style="max-height: 55px; max-width: 200px; object-fit: contain; object-position: left;">`
+                        : `<div style="font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config.nombreFantasia || config.name || ''}</div>`
+                    }
                 </div>
-                <p style="margin: 0; font-size: 9px; line-height: 1.4;">
-                    <strong>${config.razonSocial || config.nombreFantasia || config.name || ''}</strong><br>
-                    <strong>Domicilio:</strong> ${config.domicilioFiscal || ''}<br>
-                    <strong>Condición IVA:</strong> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
+                <p style="margin: 0; font-size: 9px; line-height: 1.6; color: #334155;">
+                    <strong style="color:#0f172a;">${config.razonSocial || config.nombreFantasia || config.name || ''}</strong><br>
+                    <span style="color:#64748b;">Domicilio:</span> ${config.domicilioFiscal || ''}<br>
+                    <span style="color:#64748b;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
                 </p>
             </div>
 
-            <div style="width: 50%; float: right; padding: 10px 10px 10px 40px; box-sizing: border-box;">
-                <h2 style="margin: 0 0 5px 0; font-size: 16px;">${tituloComprobante}</h2>
-                <p style="margin: 0; font-size: 10px; line-height: 1.5;">
-                    <strong>Punto de Venta: ${ptoVtaStr}</strong> &nbsp; <strong>Comp. Nro: ${numCompStr}</strong><br>
-                    <strong>Fecha de Emisión:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                    <strong>CUIT:</strong> ${config.cuit || ''}
-                    ${config.iibb ? `<br><strong>Ing. Brutos:</strong> ${config.iibb}` : ''}
-                    ${config.inicioActividades ? `<br><strong>Inicio de Actividades:</strong> ${config.inicioActividades}` : ''}
+            <div style="width: 50%; float: right; padding: 12px 12px 10px 44px; box-sizing: border-box;">
+                <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
+                <p style="margin: 0; font-size: 9.5px; line-height: 1.7; color: #334155;">
+                    <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
+                    <span style="color:#64748b;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                    <span style="color:#64748b;">CUIT:</span> ${formatCuit(config.cuit)}
+                    ${config.iibb ? `<br><span style="color:#64748b;">Ing. Brutos:</span> ${config.iibb}` : ''}
+                    ${config.inicioActividades ? `<br><span style="color:#64748b;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
                 </p>
             </div>
         </div>
 
-        <div style="border-bottom: 1px solid #000; padding: 4px 10px; font-size: 9px; background: #fff; line-height: 1.4;">
+        <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; font-size: 9px; background: #f8fafc; line-height: 1.5;">
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td style="width: 65%; padding-bottom: 2px; vertical-align: top;">
-                        <span style="color:#444; font-size:8px; text-transform:uppercase;">Cliente:</span>
-                        <strong style="text-transform: uppercase; font-size: 10px;"> ${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
+                    <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cliente</div>
+                        <strong style="text-transform: uppercase; font-size: 10px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
                     </td>
-                    <td style="width: 35%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <span style="color:#444; font-size:8px; text-transform:uppercase;">CUIT/DNI:</span>
-                        <strong style="font-size: 10px;"> ${venta.clienteCuit || clientDetails.numeroDocumento || clientDetails.cuit || clientDetails.dni || 'S/D'}</strong>
+                    <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">CUIT / DNI</div>
+                        <strong style="font-size: 10px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento || clientDetails.cuit || clientDetails.dni)}</strong>
+                    </td>
+                    <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cond. Venta</div>
+                        <strong style="font-size: 10px; color: #0f172a;">${condicionVenta}</strong>
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="padding-top: 2px; vertical-align: top;">
-                        <span style="color:#444; font-size:8px; text-transform:uppercase;">Domicilio:</span>
-                        <span style="font-size: 9px;"> ${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
-                        &nbsp;&nbsp;<span style="color:#ccc">|</span>&nbsp;&nbsp;
-                        <span style="color:#444; font-size:8px; text-transform:uppercase;">Cond. IVA:</span>
-                        <span style="font-size: 9px;"> ${condIvaTexto}</span>
+                    <td colspan="3" style="padding-top: 3px; vertical-align: top; color: #64748b;">
+                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Domicilio:</span>
+                        <span style="font-size: 9px; color: #334155;"> ${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
+                        &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
+                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Cond. IVA:</span>
+                        <span style="font-size: 9px; color: #334155;"> ${condIvaTexto}</span>
                     </td>
                 </tr>
             </table>
         </div>
 
-        <div style="min-height: 200px; padding-top: 5px;">
+        <div>
             <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
-                <thead style="border-bottom: 1px solid #000; border-top: 1px solid #000; background: #eee;">
-                    <tr>
-                        <th style="padding: 4px 5px; text-align: left;">DESCRIPCIÓN</th>
-                        <th style="padding: 4px 5px; text-align: center; width: 40px;">CANT.</th>
-                        <th style="padding: 4px 5px; text-align: right; width: 80px;">P. UNIT.</th>
-                        <th style="padding: 4px 5px; text-align: right; width: 80px;">IMPORTE</th>
+                <thead>
+                    <tr style="background: #1e293b;">
+                        <th style="padding: 6px 8px; text-align: left; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
+                        <th style="padding: 6px 5px; text-align: center; width: 30px; color: #94a3b8; font-weight: 600; font-size: 9px; text-transform: uppercase;">U.M.</th>
+                        <th style="padding: 6px 5px; text-align: center; width: 40px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Cant.</th>
+                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
+                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Importe</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
             </table>
         </div>
 
-        <div style="border-top: 1px solid #000; display: flex;">
-            <div style="width: 65%; padding: 10px; box-sizing: border-box;">
+        <div style="border-top: 1px solid #cbd5e1; display: flex;">
+            <div style="width: 60%; padding: 12px; box-sizing: border-box;">
                 ${bloquePie}
             </div>
-            <div style="width: 35%; border-left: 1px solid #000;">
+            <div style="width: 40%; border-left: 1px solid #cbd5e1;">
                 <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
-                    ${isRI && letra === 'A' ? `
-                    <tr>
-                        <td style="padding: 3px 15px 3px 5px; text-align: right;"><strong>Neto Gravado:</strong></td>
-                        <td style="padding: 3px 15px 3px 5px; text-align: right;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                    ${esFacturaA ? `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Neto Gravado (21%):</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta / 1.21)}</td>
                     </tr>
-                    <tr>
-                        <td style="padding: 3px 15px 3px 5px; text-align: right;"><strong>IVA (21%):</strong></td>
-                        <td style="padding: 3px 15px 3px 5px; text-align: right;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">IVA (21%):</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
                     </tr>
                     ` : `
-                    <tr>
-                        <td style="padding: 5px 15px 5px 5px; text-align: right;"><strong>Subtotal:</strong></td>
-                        <td style="padding: 5px 15px 5px 5px; text-align: right;">${formatCurrency(venta.totalVenta)}</td>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Subtotal:</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                     `}
-                    <tr style="background: #ddd; border-top: 1px solid #000;">
-                        <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>TOTAL:</strong></td>
-                        <td style="padding: 8px 15px 8px 8px; text-align: right; font-size: 13px;"><strong>${formatCurrency(venta.totalVenta)}</strong></td>
+                    <tr style="background: #1e293b;">
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">TOTAL:</td>
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                 </table>
             </div>
         </div>
     </div>`;
 
-    printHTML(`<html><head><title>${tituloComprobante} ${ptoVtaStr}-${numCompStr}</title><style>body { margin: 20px; } @media print { body { margin: 0; } }</style></head><body>${invoiceHtml}</body></html>`);
+    printHTML(`<html><head><title>${tituloComprobante} ${ptoVtaStr}-${numCompStr}</title><style>
+        body { margin: 20px; font-family: 'Arial Narrow', Arial, sans-serif; }
+        @media print { body { margin: 0; } }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+    </style></head><body>${invoiceHtml}</body></html>`);
 };
 
 const CollectSaleModal = ({ total, onConfirm, onClose }) => {
@@ -382,6 +411,9 @@ function Facturacion() {
     const [filterStatus, setFilterStatus] = useState('Todos');
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isEmittingARCA, setIsEmittingARCA] = useState(null);
+    const [isEmittingNC, setIsEmittingNC] = useState(null);
+    const [confirmNC, setConfirmNC] = useState(null); // venta a anular con NC
     const [confirmClientChange, setConfirmClientChange] = useState(null); // null | clientId string
     const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
@@ -629,7 +661,7 @@ function Facturacion() {
         
         // ✅ CORRECCIÓN CRÍTICA: Validación AFIP Estricta
         const clienteSeleccionado = clientes.find(c => c.id === newInvoice.clienteId);
-        const cuitCliente = clienteSeleccionado?.numeroDocumento || clienteSeleccionado?.cuit || '';
+        const cuitCliente = (clienteSeleccionado?.numeroDocumento || clienteSeleccionado?.cuit || '').replace(/\D/g, '');
 
         if (newInvoice.facturaAfip) {
             if (newInvoice.clienteId && (!cuitCliente || cuitCliente.length < 7)) {
@@ -679,6 +711,7 @@ function Facturacion() {
         finalSaleData.clienteCuit = cuitCliente;
         finalSaleData.clienteCondicionIVA = clienteSeleccionado?.condicionIva || 'CF';
         finalSaleData.clienteTipoDoc = (finalSaleData.clienteCuit.length === 11) ? 'CUIT' : 'DNI';
+        finalSaleData.afipLetra = (companyConfig?.taxCondition === 'MT') ? 'C' : (finalSaleData.clienteCondicionIVA === 'RI' ? 'A' : 'B');
     
         if (paymentData) {
             const { pagoEfectivo, pagoTransferencia, pagoTarjeta, nroCupon } = paymentData;
@@ -737,7 +770,7 @@ function Facturacion() {
             if (finalSaleData.facturaAfip) {
                 toast.info("Conectando con AFIP...");
                 try {
-                    const result = await emitirFacturaCloud({ ventas: [{ ...finalSaleData, id: newSaleRef.id }] });
+                    const result = await emitirFacturaCloud({ ventas: [{ ...finalSaleData, id: newSaleRef.id, companyInfo: companyConfig }] });
                     const resultadoAfip = result.data[0];
                     
                     if (resultadoAfip.status === 'OK') {
@@ -857,6 +890,99 @@ function Facturacion() {
     
     const getZonaNombre = (zonaId) => zonas.find(z => z.id === zonaId)?.nombre || 'N/A';
     
+    const handleEmitirFacturaARCA = async (venta) => {
+        // Leer datos frescos del cliente desde el estado en tiempo real
+        const clienteFresco = clientes.find(c => c.id === venta.clienteId) || {};
+        const cuitFresco = clienteFresco.numeroDocumento || clienteFresco.cuit || venta.clienteCuit || '';
+        const condicionIvaFresca = clienteFresco.condicionIva || venta.clienteCondicionIVA || 'CF';
+
+        if (!cuitFresco || cuitFresco.replace(/\D/g, '').length < 7) {
+            toast.error('El cliente no tiene CUIT/DNI válido para emitir factura AFIP.');
+            return;
+        }
+        if (!companyConfig?.cuit || !companyConfig?.ptoVta) {
+            toast.error('Configuración AFIP incompleta. Configure en Integraciones.');
+            return;
+        }
+
+        setIsEmittingARCA(venta.id);
+        toast.info('Conectando con ARCA (AFIP)...');
+        try {
+            const ventaParaARCA = {
+                ...venta,
+                clienteCuit: cuitFresco.replace(/\D/g, ''),
+                clienteCondicionIVA: condicionIvaFresca,
+                clienteTipoDoc: cuitFresco.replace(/\D/g, '').length === 11 ? 'CUIT' : 'DNI',
+                afipLetra: (companyConfig?.taxCondition === 'MT') ? 'C' : (condicionIvaFresca === 'RI' ? 'A' : 'B'),
+                facturaAfip: true,
+            };
+
+            const result = await emitirFacturaCloud({ ventas: [{ ...ventaParaARCA, companyInfo: companyConfig }] });
+            const resultadoAfip = result.data[0];
+
+            if (resultadoAfip.status === 'OK') {
+                toast.success('¡Factura autorizada por ARCA!');
+                const afipUpdate = Object.fromEntries(
+                    Object.entries({
+                        afipCAE: resultadoAfip.detalle.cae,
+                        afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
+                        afipNumeroComprobante: resultadoAfip.detalle.numero,
+                        afipLetra: resultadoAfip.detalle.tipoLetra,
+                        facturaAfip: true,
+                        afipPendiente: false,
+                        clienteCuit: cuitFresco,
+                        clienteCondicionIVA: condicionIvaFresca,
+                    }).filter(([, v]) => v !== undefined)
+                );
+                await updateTenantDoc('ventas', venta.id, afipUpdate);
+
+                const saleToPrint = {
+                    ...ventaParaARCA,
+                    ...afipUpdate,
+                    companyInfo: {
+                        logo: globalLogo || companyConfig?.logo,
+                        name: companyConfig?.name,
+                        nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name,
+                        razonSocial: companyConfig?.razonSocial,
+                        domicilioFiscal: companyConfig?.domicilioFiscal,
+                        taxCondition: companyConfig?.taxCondition,
+                        cuit: companyConfig?.cuit,
+                        iibb: companyConfig?.iibb,
+                        inicioActividades: companyConfig?.inicioActividades,
+                        ptoVta: companyConfig?.ptoVta,
+                    }
+                };
+                printInvoicePDF(saleToPrint, clienteFresco, getZonaNombre(clienteFresco.zonaId || venta.clienteZonaId));
+            } else {
+                toast.error(`Error ARCA: ${resultadoAfip.detalle}`);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error('Error de comunicación con ARCA.');
+        } finally {
+            setIsEmittingARCA(null);
+        }
+    };
+
+    const handleEmitirNotaCredito = async (venta) => {
+        setConfirmNC(null);
+        setIsEmittingNC(venta.id);
+        toast.info('Emitiendo Nota de Crédito en ARCA...');
+        try {
+            const result = await emitirNCCloud({ ventaId: venta.id });
+            const r = result.data;
+            if (r.status === 'OK') {
+                toast.success(`NC-${r.detalle.tipoLetra} N°${String(r.detalle.numero).padStart(8,'0')} autorizada por ARCA.`);
+            } else {
+                toast.error(`Error ARCA: ${r.detalle}`);
+            }
+        } catch (error) {
+            toast.error(`Error: ${error.message}`);
+        } finally {
+            setIsEmittingNC(null);
+        }
+    };
+
     const printVentaFromList = (venta) => {
         const clientDetails = clientes.find(c => c.id === venta.clienteId) || {};
         const zonaNombre = getZonaNombre(venta.clienteZonaId || clientDetails.zonaId);
@@ -1010,6 +1136,35 @@ function Facturacion() {
                                                             <option value="Entregada">Entregada</option>
                                                             <option value="Pagada">Pagada</option>
                                                         </select>
+                                                    )}
+                                                    {!venta.afipCAE && ['Pagada', 'Entregada', 'Pendiente de Entrega', 'Repartiendo'].includes(venta.estado) && (
+                                                        <button
+                                                            onClick={() => handleEmitirFacturaARCA(venta)}
+                                                            disabled={isEmittingARCA === venta.id}
+                                                            title="Emitir Factura ARCA / AFIP"
+                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-40 relative"
+                                                        >
+                                                            {isEmittingARCA === venta.id
+                                                                ? <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin block" />
+                                                                : <ArcaIcon />
+                                                            }
+                                                        </button>
+                                                    )}
+                                                    {venta.afipCAE && !venta.tieneNC && venta.estado !== 'Anulada' && (
+                                                        <button
+                                                            onClick={() => setConfirmNC(venta)}
+                                                            disabled={isEmittingNC === venta.id}
+                                                            title="Emitir Nota de Crédito (anular factura)"
+                                                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-40"
+                                                        >
+                                                            {isEmittingNC === venta.id
+                                                                ? <span className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin block" />
+                                                                : <NCIcon />
+                                                            }
+                                                        </button>
+                                                    )}
+                                                    {venta.tieneNC && (
+                                                        <span title={`NC-${venta.ncLetra} N°${venta.ncNumero} emitida`} className="px-1.5 py-0.5 text-[9px] font-black text-rose-500 bg-rose-50 border border-rose-200 rounded">NC</span>
                                                     )}
                                                     <button onClick={() => printVentaFromList(venta)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"><PrintIcon/></button>
                                                     <button onClick={() => handleDeleteInvoice(venta)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon/></button>
@@ -1211,6 +1366,32 @@ function Facturacion() {
             )}
             
             {isCollectModalOpen && ( <CollectSaleModal total={calculateTotal()} onClose={() => setIsCollectModalOpen(false)} onConfirm={(paymentData) => handleSaveInvoice(paymentData)} /> )}
+
+            {confirmNC && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-slate-100">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
+                                <NCIcon />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-slate-800">Emitir Nota de Crédito</h3>
+                                <p className="text-xs text-slate-400">Esta acción no se puede deshacer</p>
+                            </div>
+                        </div>
+                        <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-5 text-sm space-y-1">
+                            <div className="flex justify-between"><span className="text-slate-500">Cliente:</span><span className="font-bold text-slate-700">{confirmNC.clienteNombre}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500">Factura:</span><span className="font-bold text-slate-700">{confirmNC.afipLetra}-{String(confirmNC.afipNumeroComprobante).padStart(8,'0')}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500">Total a anular:</span><span className="font-bold text-rose-600">${parseFloat(confirmNC.totalVenta).toLocaleString('es-AR', {minimumFractionDigits:2})}</span></div>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-5">Se emitirá una NC-{confirmNC.afipLetra} en ARCA por el total y la venta quedará como <strong>Anulada</strong>.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmNC(null)} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">Cancelar</button>
+                            <button onClick={() => handleEmitirNotaCredito(confirmNC)} className="flex-1 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors">Confirmar NC</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {confirmClientChange !== null && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">

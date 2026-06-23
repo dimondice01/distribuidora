@@ -8,7 +8,7 @@ import { useShift } from '../contexts/ShiftContext';
 import { useTenant } from '../contexts/TenantContext';
 
 // --- CONFIG AFIP/ARCA ---
-const functions = getFunctions(app);
+const functions = getFunctions(app, 'southamerica-west1');
 const emitirFacturaCloud = httpsCallable(functions, 'emitirFacturasReparto');
 
 // --- ICONOS ---
@@ -30,119 +30,226 @@ const UserIcon = () => <Icono path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 01
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
+// --- HELPERS DE IMPRESIÓN POS ---
+const formatAfipDate = (dateStr) => {
+    if (!dateStr || dateStr.length !== 8) return dateStr || '';
+    return `${dateStr.substring(6, 8)}/${dateStr.substring(4, 6)}/${dateStr.substring(0, 4)}`;
+};
+
+const getAfipQrUrl = (venta, config) => {
+    if (!venta.afipCAE || !config) return null;
+    const cuitEmisor = parseInt((config.cuit || '').replace(/-/g, '') || 0);
+    const ptoVta = parseInt(config.ptoVta || 1);
+    let tipoCmp = 11;
+    if (venta.afipLetra === 'A') tipoCmp = 1;
+    if (venta.afipLetra === 'B') tipoCmp = 6;
+    const fechaObj = venta.fecha instanceof Date ? venta.fecha : (venta.fecha?.toDate ? venta.fecha.toDate() : new Date());
+    const datosQr = {
+        ver: 1,
+        fecha: fechaObj.toISOString().split('T')[0],
+        cuit: cuitEmisor,
+        ptoVta,
+        tipoCmp,
+        nroCmp: parseInt(venta.afipNumeroComprobante || 0),
+        importe: parseFloat(venta.totalVenta),
+        moneda: "PES",
+        ctz: 1,
+        tipoDocRec: parseInt(venta.clienteTipoDoc === 'CUIT' ? 80 : 96),
+        nroDocRec: parseInt(venta.clienteCuit || 0),
+        tipoCodAut: "E",
+        codAut: parseInt(venta.afipCAE)
+    };
+    try {
+        const base64Data = btoa(JSON.stringify(datosQr));
+        const urlAfip = `https://www.afip.gob.ar/fe/qr/?p=${base64Data}`;
+        return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(urlAfip)}`;
+    } catch (e) { return null; }
+};
+
 // --- LÓGICA DE IMPRESIÓN ---
 const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
+    const config = venta.companyInfo || {};
     const fechaImpresion = venta.fecha instanceof Timestamp ? venta.fecha.toDate() : (venta.fecha || new Date());
+
     const tieneCAE = !!venta.afipCAE;
     const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
+    const esFacturaA = letra === 'A';
     const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
+    const ptoVtaStr = String(config.ptoVta || '00001').padStart(5, '0');
     const numCompStr = String(venta.afipNumeroComprobante || (venta.id ? venta.id.substring(0, 8) : '00000000')).padStart(8, '0');
-    
-    // Datos de la empresa desde config
-    const co = venta.companyInfo || {};
-    const logoUrl = co.logo || '';
-    const companyName = co.nombreFantasia || co.name || 'DISTRIBUIDORA';
-    const companyAddress = co.domicilioFiscal || 'Argentina';
-    const taxType = co.taxCondition === 'RI' ? 'Responsable Inscripto' : 'Monotributista';
-    
-    let qrHtml = '';
-    if (tieneCAE) {
-        const cleanCuit = String(co.cuit || '01234567890').replace(/-/g, '');
-        const datosQr = { 
-            ver: 1, 
-            fecha: fechaImpresion.toISOString().split('T')[0], 
-            cuit: parseInt(cleanCuit), 
-            ptoVta: parseInt(co.ptoVta || 1), 
-            tipoCmp: letra === 'A' ? 1 : (letra === 'B' ? 6 : 11), 
-            nroCmp: parseInt(venta.afipNumeroComprobante || 0), 
-            importe: parseFloat(venta.totalVenta), 
-            moneda: "PES", 
-            ctz: 1, 
-            codAut: parseInt(venta.afipCAE) 
-        };
-        const jsonString = JSON.stringify(datosQr);
-        const base64Data = btoa(jsonString); 
-        const urlAfip = `https://www.afip.gob.ar/fe/qr/?p=${base64Data}`;
-        const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(urlAfip)}`;
-        qrHtml = `
-            <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
-                <img src="${qrImgUrl}" alt="QR AFIP" style="width: 80px; height: 80px; border: 1px solid #ddd;" />
-                <div style="font-size: 10px; font-weight: bold;">
-                    <span style="font-style: italic; color: #666;">Comprobante autorizado por AFIP</span><br>
-                    <span style="font-size: 11px;">CAE: ${venta.afipCAE}</span><br>
-                    <span>Vto. CAE: ${venta.afipFechaVtoCAE || ''}</span>
-                </div>
-            </div>`;
-    }
 
-    const itemsHtml = (venta.items || []).map(item => `
-        <tr style="border-bottom: 1px solid #ccc;">
-            <td style="padding: 5px;">${item.nombre}</td>
-            <td style="text-align: center; padding: 5px;">${item.quantity}</td>
-            <td style="text-align: right; padding: 5px;">${formatCurrency(item.precio)}</td>
-            <td style="text-align: right; padding: 5px;">${formatCurrency(item.quantity * item.precio)}</td>
-        </tr>`).join('');
+    const formatCuit = (val) => {
+        const c = String(val || '').replace(/\D/g, '');
+        if (c.length === 11) return `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}`;
+        return val || 'S/D';
+    };
+    const condicionVenta = (venta.saldoPendiente !== undefined && venta.saldoPendiente <= 0.01)
+        ? ((venta.pagoTarjeta || 0) > 0 ? 'Tarjeta' : 'Contado')
+        : 'Cuenta Corriente';
+
+    const isRI = config.taxCondition === 'RI' || config.taxCondition === 'RESPONSABLE_INSCRIPTO';
+    const qrUrl = getAfipQrUrl(venta, config);
+    const vtoCaeFormateado = formatAfipDate(venta.afipFechaVtoCAE);
+    const condIvaTexto = venta.clienteCondicionIVA === 'RI' ? 'Resp. Inscripto' : venta.clienteCondicionIVA === 'MT' ? 'Monotributo' : 'Cons. Final';
+
+    const itemsHtml = (venta.items || []).map((item, idx) => {
+        const precioUnit = esFacturaA ? item.precio / 1.21 : item.precio;
+        const subtotal = esFacturaA ? (item.precio * item.quantity) / 1.21 : item.precio * item.quantity;
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        return `
+        <tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 5px 8px; font-size: 10px; color: #334155;">${item.nombre}</td>
+            <td style="padding: 5px 5px; text-align: center; font-size: 9px; width: 30px; color: #94a3b8;">u.</td>
+            <td style="padding: 5px 5px; text-align: center; font-size: 10px; width: 40px; color: #334155;">${item.quantity}</td>
+            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; color: #334155;">${formatCurrency(precioUnit)}</td>
+            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; font-weight: 700; color: #0f172a;">${formatCurrency(subtotal)}</td>
+        </tr>`;
+    }).join('');
+
+    const bloquePie = tieneCAE ? `
+        <div style="display: flex; gap: 14px; align-items: flex-start;">
+            <div>
+                <img src="${qrUrl}" alt="QR AFIP" style="width: 90px; height: 90px; display: block; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <div style="text-align: center; margin-top: 3px; font-size: 7.5px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
+            </div>
+            <div style="font-size: 9px; color: #1e293b; line-height: 1.7;">
+                <div style="font-size: 10px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Comprobante Autorizado por ARCA</div>
+                <div><span style="color:#64748b;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
+                <div><span style="color:#64748b;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
+            </div>
+        </div>
+    ` : `
+        <div style="border: 1px dashed #94a3b8; padding: 8px; text-align: center; background: #f8fafc; border-radius: 4px;">
+            <strong style="font-size: 10px; color: #64748b; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
+        </div>
+    `;
+
+    const invoiceHtml = `
+    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b;">
+
+        <div style="text-align: right; padding: 4px 10px 0; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">ORIGINAL</div>
+
+        <div style="border-bottom: 1px solid #cbd5e1; min-height: 120px; position: relative; overflow: hidden;">
+            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 68px; min-height: 68px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background: #1e293b; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1;">
+                <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
+                <div style="font-size: 8px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
+            </div>
+            <div style="position: absolute; left: 50%; top: 68px; bottom: 0; border-left: 1px solid #cbd5e1;"></div>
+
+            <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
+                <div style="margin-bottom: 6px;">
+                    ${config.logo
+                        ? `<img src="${config.logo}" alt="Logo" style="max-height: 55px; max-width: 200px; object-fit: contain; object-position: left;">`
+                        : `<div style="font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config.nombreFantasia || config.name || ''}</div>`
+                    }
+                </div>
+                <p style="margin: 0; font-size: 9px; line-height: 1.6; color: #334155;">
+                    <strong style="color:#0f172a;">${config.razonSocial || config.nombreFantasia || config.name || ''}</strong><br>
+                    <span style="color:#64748b;">Domicilio:</span> ${config.domicilioFiscal || ''}<br>
+                    <span style="color:#64748b;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
+                </p>
+            </div>
+
+            <div style="width: 50%; float: right; padding: 12px 12px 10px 44px; box-sizing: border-box;">
+                <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
+                <p style="margin: 0; font-size: 9.5px; line-height: 1.7; color: #334155;">
+                    <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
+                    <span style="color:#64748b;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                    <span style="color:#64748b;">CUIT:</span> ${formatCuit(config.cuit)}
+                    ${config.iibb ? `<br><span style="color:#64748b;">Ing. Brutos:</span> ${config.iibb}` : ''}
+                    ${config.inicioActividades ? `<br><span style="color:#64748b;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                </p>
+            </div>
+        </div>
+
+        <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; font-size: 9px; background: #f8fafc; line-height: 1.5;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cliente</div>
+                        <strong style="text-transform: uppercase; font-size: 10px; color: #0f172a;">${venta.clienteNombre || 'CONSUMIDOR FINAL'}</strong>
+                    </td>
+                    <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">CUIT / DNI</div>
+                        <strong style="font-size: 10px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.cuit || clientDetails.dni)}</strong>
+                    </td>
+                    <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cond. Venta</div>
+                        <strong style="font-size: 10px; color: #0f172a;">${condicionVenta}</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding-top: 3px; vertical-align: top; color: #64748b;">
+                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Zona:</span>
+                        <span style="font-size: 9px; color: #334155;"> ${zonaNombre}</span>
+                        &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
+                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Cond. IVA:</span>
+                        <span style="font-size: 9px; color: #334155;"> ${condIvaTexto}</span>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                <thead>
+                    <tr style="background: #1e293b;">
+                        <th style="padding: 6px 8px; text-align: left; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
+                        <th style="padding: 6px 5px; text-align: center; width: 30px; color: #94a3b8; font-weight: 600; font-size: 9px; text-transform: uppercase;">U.M.</th>
+                        <th style="padding: 6px 5px; text-align: center; width: 40px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Cant.</th>
+                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
+                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+        </div>
+
+        <div style="border-top: 1px solid #cbd5e1; display: flex;">
+            <div style="width: 60%; padding: 12px; box-sizing: border-box;">
+                ${bloquePie}
+            </div>
+            <div style="width: 40%; border-left: 1px solid #cbd5e1;">
+                <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                    ${esFacturaA ? `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Neto Gravado (21%):</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">IVA (21%):</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                    </tr>
+                    ` : `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Subtotal:</td>
+                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta)}</td>
+                    </tr>
+                    `}
+                    <tr style="background: #1e293b;">
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">TOTAL:</td>
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">${formatCurrency(venta.totalVenta)}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>`;
 
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`
-        <html>
-        <head>
-            <title>${tituloComprobante} #${numCompStr}</title>
-            <style>
-                body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; font-size: 12px; color: #333; }
-                .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,.15); border-radius: 8px; }
-                .header { display: flex; justify-content: space-between; border-bottom: 2px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
-                .company-info { width: 50%; }
-                .logo-container { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-                .logo-icon { width: 30px; height: 30px; background-color: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fbbf24; font-weight: 900; font-size: 18px; }
-                .logo-text { font-size: 18px; font-weight: 900; color: #0f172a; }
-                .letter-box { width: 50px; height: 50px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; background: #f9f9f9; }
-                .invoice-data { text-align: right; width: 40%; }
-                .client-info { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #d97706; }
-                table { width: 100%; border-collapse: collapse; }
-                th { background: #e9ecef; text-transform: uppercase; font-size: 11px; padding: 10px; text-align: left; }
-                td { padding: 10px; }
-                .text-right { text-align: right; }
-                .total-row td { border-top: 2px solid #333; font-weight: bold; font-size: 14px; padding-top: 10px; }
-                .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="invoice-box">
-                <div class="header">
-                    <div class="company-info">
-                        <div class="logo-container">
-                            ${logoUrl ? `
-                                <img src="${logoUrl}" alt="Logo" style="max-height: 40px; max-width: 150px; object-contain: left;">
-                            ` : `
-                                <div class="logo-icon">${companyName[0].toUpperCase()}</div>
-                                <div class="logo-text">${companyName}</div>
-                            `}
-                        </div>
-                        <p style="margin: 0; font-size: 10px; color: #666;"><strong>${companyName}</strong><br>${taxType} | ${companyAddress}</p>
-                    </div>
-                    <div style="display: flex; flex-direction: column; align-items: center;"><div class="letter-box">${letra}</div><span style="font-size: 9px; margin-top: 5px;">${codComprobante}</span></div>
-                    <div class="invoice-data"><h2 style="margin: 0;">${tituloComprobante}</h2><p style="font-size: 11px;"><strong>Nº:</strong> 00005-${numCompStr}<br><strong>Fecha:</strong> ${fechaImpresion.toLocaleDateString('es-AR')}</p></div>
-                </div>
-                <div class="client-info"><strong>Cliente:</strong> ${venta.clienteNombre || 'Consumidor Final'}<br><strong>CUIT/DNI:</strong> ${clientDetails.cuit || clientDetails.dni || 'S/D'}<br><strong>Zona:</strong> ${zonaNombre}</div>
-                <table><thead><tr><th>Producto</th><th class="text-right">Cant.</th><th class="text-right">Precio</th><th class="text-right">Subtotal</th></tr></thead>
-                    <tbody>${itemsHtml}</tbody>
-                    <tfoot><tr class="total-row"><td colspan="3" class="text-right">TOTAL</td><td class="text-right">${formatCurrency(venta.totalVenta)}</td></tr></tfoot>
-                </table>
-                ${qrHtml}
-                <div class="footer">Documento generado por <strong>Noar ERP - Terminal POS Local</strong>.</div>
-            </div>
-        </body>
-        </html>
-    `);
+    if (!printWindow) { toast.warn("El navegador bloqueó la impresión. Deshabilite el bloqueador de pop-ups."); return; }
+    printWindow.document.write(`<html><head><title>${tituloComprobante} ${ptoVtaStr}-${numCompStr}</title><style>
+        body { margin: 20px; font-family: 'Arial Narrow', Arial, sans-serif; }
+        @media print { body { margin: 0; } }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+    </style></head><body>${invoiceHtml}</body></html>`);
     printWindow.document.close();
-    setTimeout(() => printWindow.print(), 1000); 
+    setTimeout(() => printWindow.print(), 1500);
 };
 
 // --- MODAL DE COBRO ---
-const PaymentModal = ({ total, onConfirm, onClose, selectedClient }) => {
+const PaymentModal = ({ total, onConfirm, onClose, selectedClient, companyConfig }) => {
     const [pagoEfectivo, setPagoEfectivo] = useState(total.toString());
     const [pagoTransferencia, setPagoTransferencia] = useState('');
     const [pagoTarjeta, setPagoTarjeta] = useState('');
@@ -185,10 +292,6 @@ const PaymentModal = ({ total, onConfirm, onClose, selectedClient }) => {
                 return;
             }
 
-            if (document.length < 7 && afipLetra !== 'C') {
-                setError('DNI/CUIT insuficiente para emisión fiscal.');
-                return;
-            }
         }
 
         onConfirm({ 
@@ -429,7 +532,7 @@ const POS = () => {
         // Si es para reparto, el estado debe ser 'Pendiente de Entrega' para que aparezca en Rutas
         const estadoVenta = (selectedClientId && isForDelivery) ? 'Pendiente de Entrega' : 'Pagada';
 
-        const cuitCliente = client.numeroDocumento || client.cuit || client.dni || '';
+        const cuitCliente = (client.numeroDocumento || client.cuit || client.dni || '').replace(/\D/g, '');
 
         const saleData = {
             companyId: tenantId,
@@ -454,19 +557,9 @@ const POS = () => {
             paymentMethod: 'contado',
             facturaAfip: isAfipEnabled,
             syncPendiente: !isOnline,
-            // --- AUTOMATIZACIÓN FISCAL ---
             afipLetra: (companyConfig?.taxCondition === 'MT')
                 ? 'C'
                 : (client.condicionIva === 'RI' ? 'A' : 'B'),
-            companyInfo: {
-                logo: globalLogo,
-                name: companyConfig?.name,
-                nombreFantasia: companyConfig?.nombreFantasia,
-                cuit: companyConfig?.cuit,
-                domicilioFiscal: companyConfig?.domicilioFiscal,
-                taxCondition: companyConfig?.taxCondition,
-                ptoVta: companyConfig?.ptoVta || 1
-            }
         };
 
         try {
@@ -509,21 +602,35 @@ const POS = () => {
             
             // 3. Si requiere factura AFIP/ARCA, llamar a la Cloud Function
             let saleForPDF = { ...saleData, id: finalSaleId };
-            
+
             if (isAfipEnabled) {
-                // Actualizamos estado de carga para mostrar que estamos con AFIP
                 setIsSaving("Procesando AFIP/ARCA...");
                 toast.info("Conectando con ARCA (AFIP)...");
                 try {
-                    const result = await emitirFacturaCloud({ ventas: [{ ...saleData, id: finalSaleId }] });
+                    const result = await emitirFacturaCloud({ ventas: [{ ...saleData, id: finalSaleId, companyInfo: companyConfig }] });
                     const resultadoAfip = result.data[0];
                     if (resultadoAfip.status === 'OK') {
                         toast.success("¡Factura autorizada!");
-                        
-                        // ACTUALIZACIÓN CRÍTICA: Guardamos los datos fiscales en la base de datos
+                        // Igual que Facturacion.jsx: usar el response directamente
+                        saleForPDF = {
+                            ...saleForPDF,
+                            afipCAE: resultadoAfip.detalle.cae,
+                            afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
+                            afipNumeroComprobante: resultadoAfip.detalle.numero,
+                            afipLetra: resultadoAfip.detalle.tipoLetra
+                        };
+                        // Persistir en Firestore filtrando undefined (Firestore no acepta undefined)
                         try {
-                            const vRefUpdate = getTenantDoc('ventas', finalSaleId);
-                            // Log fiscal de respaldo
+                            const afipUpdate = Object.fromEntries(
+                                Object.entries({
+                                    afipCAE: resultadoAfip.detalle.cae,
+                                    afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
+                                    afipNumeroComprobante: resultadoAfip.detalle.numero,
+                                    afipLetra: resultadoAfip.detalle.tipoLetra,
+                                    facturaAfip: true
+                                }).filter(([, v]) => v !== undefined)
+                            );
+                            await updateDoc(getTenantDoc('ventas', finalSaleId), afipUpdate);
                             await addTenantDoc('logs_fiscales', {
                                 ventaId: finalSaleId,
                                 fecha: Timestamp.now(),
@@ -531,40 +638,34 @@ const POS = () => {
                                 numero: resultadoAfip.detalle.numero,
                                 total: total
                             });
-                            // Actualizamos el documento de venta con el nuevo número y CAE
-                            await updateDoc(vRefUpdate, {
-                                afipCAE: resultadoAfip.detalle.cae,
-                                afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
-                                afipNumeroComprobante: resultadoAfip.detalle.numero,
-                                afipLetra: resultadoAfip.detalle.tipoLetra,
-                                facturaAfip: true
-                            });
-
-                            saleForPDF = { 
-                                ...saleForPDF, 
-                                afipCAE: resultadoAfip.detalle.cae,
-                                afipFechaVtoCAE: resultadoAfip.detalle.vtoCAE,
-                                afipNumeroComprobante: resultadoAfip.detalle.numero,
-                                afipLetra: resultadoAfip.detalle.tipoLetra
-                            };
                         } catch (persistError) {
                             console.error("Error al persistir datos AFIP:", persistError);
                             toast.error("Venta OK pero error al guardar datos fiscales. ¡No pierda el ticket!");
                         }
-                    } else { toast.error(`Error AFIP: ${resultadoAfip.detalle}`); }
-                } catch (afipError) { toast.error("Error de comunicación fiscal."); }
+                    } else {
+                        toast.error(`Error AFIP: ${resultadoAfip.detalle}`);
+                    }
+                } catch (afipError) {
+                    toast.error("Error de comunicación fiscal.");
+                }
             }
 
             if (autoPrint) {
-                // Inyectamos la info de empresa para el PDF
-                const pdfData = { 
-                    ...saleForPDF, 
-                    companyInfo: { 
-                        logo: globalLogo, 
-                        nombreFantasia: companyConfig?.nombreFantasia, 
+                // Igual que Facturacion.jsx: inyectar companyInfo explícitamente para el PDF
+                const pdfData = {
+                    ...saleForPDF,
+                    companyInfo: {
+                        logo: globalLogo || companyConfig?.logo,
+                        name: companyConfig?.name,
+                        nombreFantasia: companyConfig?.nombreFantasia || companyConfig?.name,
+                        razonSocial: companyConfig?.razonSocial,
                         domicilioFiscal: companyConfig?.domicilioFiscal,
-                        taxCondition: companyConfig?.taxCondition
-                    } 
+                        taxCondition: companyConfig?.taxCondition,
+                        cuit: companyConfig?.cuit,
+                        iibb: companyConfig?.iibb,
+                        inicioActividades: companyConfig?.inicioActividades,
+                        ptoVta: companyConfig?.ptoVta,
+                    }
                 };
                 printInvoicePDF(pdfData, client, zonas.find(z => z.id === client.zonaId)?.nombre || 'Local');
             }
