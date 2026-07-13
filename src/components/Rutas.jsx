@@ -428,6 +428,7 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
     const [selectedInvoices, setSelectedInvoices] = useState(route.facturas || []);
     const [assignedRepartidor, setAssignedRepartidor] = useState(route.repartidorId || '');
     const [isDispatching, setIsDispatching] = useState(false);
+    const [facturasPorHoja, setFacturasPorHoja] = useState(1);
 
     const availableInvoices = useMemo(() => {
         return allPendingInvoices.filter(inv => {
@@ -454,7 +455,7 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
         if (selectedInvoices.length === 0) return toast.error("La ruta está vacía.");
         setIsDispatching(true);
         try {
-            await onDispatch(route.id, assignedRepartidor, selectedInvoices, routeSummary);
+            await onDispatch(route.id, assignedRepartidor, selectedInvoices, routeSummary, facturasPorHoja);
             onClose();
         } catch (error) {
             toast.error("Error al despachar: " + error.message);
@@ -560,6 +561,13 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                         <div className="text-xs text-gray-500">Total <span className="block text-lg font-bold text-indigo-600">{formatCurrency(routeSummary.totalMoney)}</span></div>
                                     </div>
                                 </div>
+                                <div className="flex items-center justify-between mb-3 bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                                    <span className="text-[11px] font-bold text-gray-500 ml-1 flex items-center gap-1"><PrinterIcon className="w-3.5 h-3.5"/> Facturas por hoja A4</span>
+                                    <div className="flex bg-white rounded-lg border border-gray-200 p-0.5">
+                                        <button type="button" onClick={() => setFacturasPorHoja(1)} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${facturasPorHoja === 1 ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>1 x hoja</button>
+                                        <button type="button" onClick={() => setFacturasPorHoja(2)} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${facturasPorHoja === 2 ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>2 x hoja</button>
+                                    </div>
+                                </div>
                                 <button onClick={handleConfirmDispatch} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
                                     {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
                                 </button>
@@ -648,7 +656,7 @@ function Rutas() {
     };
 
     // --- LÓGICA DE DESPACHO INTELIGENTE (AFIP + PDF) ---
-    const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen) => {
+    const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen, facturasPorHoja = 1) => {
         const repartidor = allVendors.find(r => r.id === repartidorId);
         
         // --- BLINDAJE FISCAL: PRE-VUELO ---
@@ -784,10 +792,24 @@ function Rutas() {
         });
         
         const invoicesHtmls = await Promise.all(printPromises);
-        invoicesHtmls.forEach(html => {
-            allPrintContent += `<div style="padding: 20px;">${html}</div><div style="page-break-after: always;"></div>`;
-        });
-        
+
+        if (facturasPorHoja === 2) {
+            // Dos facturas DISTINTAS por hoja A4 (mitad superior / mitad inferior), sin repetir contenido.
+            for (let i = 0; i < invoicesHtmls.length; i += 2) {
+                const primera = invoicesHtmls[i];
+                const segunda = invoicesHtmls[i + 1];
+                allPrintContent += `<div style="padding: 15px 20px;">${primera}</div>`;
+                if (segunda) {
+                    allPrintContent += `<div style="margin: 10px 20px; border-top: 1px dashed #94a3b8;"></div><div style="padding: 15px 20px;">${segunda}</div>`;
+                }
+                allPrintContent += `<div style="page-break-after: always;"></div>`;
+            }
+        } else {
+            invoicesHtmls.forEach(html => {
+                allPrintContent += `<div style="padding: 20px;">${html}</div><div style="page-break-after: always;"></div>`;
+            });
+        }
+
         printHTML(`<html><head><style>
             body { font-family: 'Arial Narrow', Arial, sans-serif; margin: 0; }
             @media print { body { margin: 0; } }
