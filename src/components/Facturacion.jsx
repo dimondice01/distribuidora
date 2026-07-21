@@ -1105,7 +1105,7 @@ function Facturacion() {
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${statusColor}`}>
                                             {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado}
                                         </span>
-                                        {venta.facturaAfip && !venta.afipCAE && (
+                                        {venta.facturaAfip && !venta.afipCAE && venta.estado !== 'Pendiente de Entrega' && (
                                             <span title="Factura guardada sin CAE de AFIP" className="ml-1.5 px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded border border-red-200 uppercase cursor-help">Sin CAE ⚠</span>
                                         )}
                                     </td>

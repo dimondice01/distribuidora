@@ -429,6 +429,7 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
     const [assignedRepartidor, setAssignedRepartidor] = useState(route.repartidorId || '');
     const [isDispatching, setIsDispatching] = useState(false);
     const [facturasPorHoja, setFacturasPorHoja] = useState(1);
+    const [noFacturarRuta, setNoFacturarRuta] = useState(false);
 
     const availableInvoices = useMemo(() => {
         return allPendingInvoices.filter(inv => {
@@ -455,7 +456,10 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
         if (selectedInvoices.length === 0) return toast.error("La ruta está vacía.");
         setIsDispatching(true);
         try {
-            await onDispatch(route.id, assignedRepartidor, selectedInvoices, routeSummary, facturasPorHoja);
+            const invoicesToDispatch = noFacturarRuta
+                ? selectedInvoices.map(inv => ({ ...inv, facturaAfip: false }))
+                : selectedInvoices;
+            await onDispatch(route.id, assignedRepartidor, invoicesToDispatch, routeSummary, facturasPorHoja);
             onClose();
         } catch (error) {
             toast.error("Error al despachar: " + error.message);
@@ -568,6 +572,24 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                         <button type="button" onClick={() => setFacturasPorHoja(2)} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${facturasPorHoja === 2 ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>2 x hoja</button>
                                     </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setNoFacturarRuta(v => !v)}
+                                    title="Ninguna factura de esta ruta se enviará a ARCA/AFIP al despachar. Las ventas quedarán guardadas sin CAE (como presupuesto) y podrán facturarse manualmente después."
+                                    className={`w-full flex items-center justify-between mb-3 rounded-xl p-2.5 border transition-colors ${noFacturarRuta ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}
+                                >
+                                    <span className={`text-[11px] font-bold ml-1 flex items-center gap-1.5 ${noFacturarRuta ? 'text-red-600' : 'text-gray-500'}`}>
+                                        <XIcon className="w-3.5 h-3.5"/> No facturar esta ruta ante ARCA/AFIP
+                                    </span>
+                                    <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${noFacturarRuta ? 'bg-red-500' : 'bg-gray-300'}`}>
+                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${noFacturarRuta ? 'translate-x-4' : 'translate-x-1'}`} />
+                                    </span>
+                                </button>
+                                {noFacturarRuta && (
+                                    <p className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 mb-3 -mt-1.5">
+                                        ⚠ Ninguna venta de esta ruta pedirá CAE al despachar. Quedarán como "Sin CAE" para facturar manualmente más adelante si hace falta.
+                                    </p>
+                                )}
                                 <button onClick={handleConfirmDispatch} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
                                     {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
                                 </button>
