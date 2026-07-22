@@ -93,8 +93,11 @@ const printReport = (startDate, endDate, totals, ventas) => {
 
 function ReporteGeneral() {
     const [ventas, setVentas] = useState([]);
+    const [cobranzas, setCobranzas] = useState([]);
+    const [gastos, setGastos] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    
+    const [activeTab, setActiveTab] = useState('ganancia'); // 'ganancia' (devengado) | 'flujo' (caja real)
+
     // Fechas iniciales (Local Timezone)
     const [startDate, setStartDate] = useState(() => {
         const d = new Date(); d.setHours(0, 0, 0, 0); return d;
@@ -107,6 +110,9 @@ function ReporteGeneral() {
     const [itemsPerPage] = useState(15);
 
     // --- CÁLCULO DE MÉTRICAS (Usando useMemo) ---
+    // IMPORTANTE: esto es GANANCIA DEVENGADA (por fecha real de venta). Los cobros de
+    // saldo pendiente NUNCA suman acá: ya se contaron como ganancia el día de la venta.
+    // El dinero que efectivamente entra por cobros se ve en la pestaña "Flujo de Efectivo".
     const totals = useMemo(() => {
         return ventas.reduce((acc, v) => {
             const costo = v.totalCosto || 0;
@@ -131,7 +137,7 @@ function ReporteGeneral() {
 
     const { tenantId, onTenantSnapshot } = useFirestore();
 
-    // --- CARGA DE DATOS (Filtrado por Tenant y Fecha) ---
+    // --- CARGA DE VENTAS (Filtrado por Tenant y Fecha REAL de venta) ---
     useEffect(() => {
         if (!tenantId) {
             setVentas([]);
@@ -140,38 +146,43 @@ function ReporteGeneral() {
         }
 
         setIsLoading(true);
-        
+
         // Usamos onTenantSnapshot para inyectar automáticamente el filtro de companyId
         const unsubscribe = onTenantSnapshot('ventas', (querySnapshot) => {
             const ventasData = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                
-                // Determinamos la fecha relevante:
-                // Si tiene fechaUltimoPago (ej: cobro de ruta), usamos esa. Si no, la fecha de creación.
-                // Esto asegura que el reporte refleje CUÁNDO ocurrió el movimiento financiero.
-                let fechaMovimiento = data.fechaUltimoPago ? data.fechaUltimoPago.toDate() : (data.fecha ? data.fecha.toDate() : null);
-                
-                if (fechaMovimiento) {
+
+                // Ganancia = devengado: SIEMPRE la fecha real de la venta. Nunca la fecha
+                // del último pago, para que un cobro posterior no haga "reaparecer" la
+                // venta completa (con su totalVenta íntegro) en el reporte del día de hoy.
+                const fechaVenta = data.fecha ? data.fecha.toDate() : null;
+
+                if (fechaVenta) {
                     // Filtro de fecha (Local comparison)
-                    if (fechaMovimiento >= startDate && fechaMovimiento <= endDate) {
-                        
+                    if (fechaVenta >= startDate && fechaVenta <= endDate) {
+
                         // FILTRO CLAVE: Solo mostrar si hubo movimiento real (No Pendientes puros sin pago)
                         // Si es 'Pendiente de Entrega' y NO tiene pagos parciales, lo ignoramos (es una venta futura/planificada).
                         const tienePagos = (data.pagoEfectivo > 0 || data.pagoTransferencia > 0);
                         const esPendientePuro = data.estado === RENDER_STATUS.PENDIENTE && !tienePagos;
 
-                        if (!esPendientePuro) {
+                        // Compatibilidad hacia atrás: si quedó algún cobro viejo escrito
+                        // dentro de "ventas" (antes de separar la colección cobranzas),
+                        // lo excluimos para que no ensucie el reporte de ganancia.
+                        const esCobroLegacy = data.tipo === 'cobranza' || data.tipo === 'cobro';
+
+                        if (!esPendientePuro && !esCobroLegacy) {
                             ventasData.push({
                                 id: doc.id,
                                 ...data,
-                                fecha: fechaMovimiento, // Usamos la fecha efectiva para mostrar en la tabla
+                                fecha: fechaVenta,
                             });
                         }
                     }
                 }
             });
-            
+
             setVentas(ventasData);
             setCurrentPage(1);
             setIsLoading(false);
@@ -180,7 +191,103 @@ function ReporteGeneral() {
         return () => unsubscribe();
     }, [startDate, endDate, tenantId]);
 
-    
+    // --- CARGA DE COBRANZAS Y GASTOS (Para Flujo de Efectivo real) ---
+    useEffect(() => {
+        if (!tenantId) {
+            setCobranzas([]);
+            setGastos([]);
+            return;
+        }
+
+        const unsubCobranzas = onTenantSnapshot('cobranzas', (querySnapshot) => {
+            const data = [];
+            querySnapshot.forEach((doc) => {
+                const d = doc.data();
+                const fecha = d.fecha ? d.fecha.toDate() : null;
+                if (fecha && fecha >= startDate && fecha <= endDate) {
+                    data.push({ id: doc.id, ...d, fecha });
+                }
+            });
+            setCobranzas(data);
+        }, [{ field: 'fecha', direction: 'desc' }]);
+
+        const unsubGastos = onTenantSnapshot('gastos', (querySnapshot) => {
+            const data = [];
+            querySnapshot.forEach((doc) => {
+                const d = doc.data();
+                const fecha = d.fechaGasto ? d.fechaGasto.toDate() : (d.fecha ? d.fecha.toDate() : null);
+                if (fecha && fecha >= startDate && fecha <= endDate) {
+                    data.push({ id: doc.id, ...d, fecha });
+                }
+            });
+            setGastos(data);
+        }, [{ field: 'fechaGasto', direction: 'desc' }]);
+
+        return () => { unsubCobranzas(); unsubGastos(); };
+    }, [startDate, endDate, tenantId]);
+
+    // --- FLUJO DE EFECTIVO REAL (por método de pago y fecha real de cobro) ---
+    const flujoEfectivo = useMemo(() => {
+        const result = {
+            porMetodo: { Efectivo: 0, Transferencia: 0, Tarjeta: 0, QR: 0, Point: 0 },
+            totalIngresos: 0,
+            totalEgresos: 0,
+            movimientos: [],
+        };
+
+        // Pagos recibidos en el momento mismo de la venta/entrega
+        ventas.forEach(v => {
+            [
+                ['Efectivo', v.pagoEfectivo],
+                ['Transferencia', v.pagoTransferencia],
+                ['Tarjeta', v.pagoTarjeta],
+                ['QR', v.pagoQR],
+                ['Point', v.pagoPoint],
+            ].forEach(([metodo, monto]) => {
+                const m = parseFloat(monto) || 0;
+                if (m > 0) {
+                    result.porMetodo[metodo] = (result.porMetodo[metodo] || 0) + m;
+                    result.totalIngresos += m;
+                    result.movimientos.push({
+                        id: `${v.id}-${metodo}`, fecha: v.fecha,
+                        origen: v.clienteNombre || v.clientName || 'Cliente',
+                        tipo: 'Venta', metodo, monto: m,
+                    });
+                }
+            });
+        });
+
+        // Cobros de saldo pendiente (colección separada, no duplican ganancia)
+        cobranzas.forEach(c => {
+            const monto = parseFloat(c.monto) || 0;
+            if (monto > 0) {
+                const metodo = c.metodoPago || 'Efectivo';
+                result.porMetodo[metodo] = (result.porMetodo[metodo] || 0) + monto;
+                result.totalIngresos += monto;
+                result.movimientos.push({
+                    id: c.id, fecha: c.fecha, origen: c.clienteNombre || 'Cliente',
+                    tipo: 'Cobro', metodo, monto,
+                });
+            }
+        });
+
+        // Egresos (gastos de caja)
+        gastos.forEach(g => {
+            const monto = parseFloat(g.monto) || 0;
+            result.totalEgresos += monto;
+            result.movimientos.push({
+                id: g.id, fecha: g.fecha, origen: g.detalle || 'Gasto',
+                tipo: 'Egreso', metodo: g.metodoPago || 'Efectivo', monto: -monto,
+            });
+        });
+
+        result.movimientos.sort((a, b) => (b.fecha?.getTime?.() || 0) - (a.fecha?.getTime?.() || 0));
+        result.saldoNeto = result.totalIngresos - result.totalEgresos;
+
+        return result;
+    }, [ventas, cobranzas, gastos]);
+
+
     // --- Paginación ---
     const { paginatedVentas, totalPages } = useMemo(() => {
         const total = ventas.length;
@@ -236,10 +343,28 @@ function ReporteGeneral() {
                         </button>
                     </div>
                 </header>
-                
+
+                {/* Tabs: Ganancia (devengado) vs Flujo de Efectivo (caja real) */}
+                <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 w-fit">
+                    <button
+                        onClick={() => setActiveTab('ganancia')}
+                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'ganancia' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >
+                        Ganancia (Operativo)
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('flujo')}
+                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'flujo' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >
+                        Flujo de Efectivo
+                    </button>
+                </div>
+
+                {activeTab === 'ganancia' && (
+                <>
                 {/* Tarjetas de Resumen (Estilo iOS Glassy) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
-                    
+
                     <MetricCard 
                         title="Total Ventas" 
                         value={formatCurrency(totals.totalVenta)} 
@@ -360,6 +485,112 @@ function ReporteGeneral() {
                         </div>
                     )}
                 </div>
+                </>
+                )}
+
+                {activeTab === 'flujo' && (
+                <>
+                {/* Tarjetas de Resumen: Flujo de Efectivo REAL (por método de pago) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+                    <MetricCard
+                        title="Total Ingresado"
+                        value={formatCurrency(flujoEfectivo.totalIngresos)}
+                        icon={<TrendingUp className="text-emerald-600"/>}
+                        bgIcon="bg-emerald-100"
+                        borderColor="border-emerald-500"
+                    />
+                    <MetricCard
+                        title="Total Egresos"
+                        value={formatCurrency(flujoEfectivo.totalEgresos)}
+                        icon={<TrendingDown className="text-rose-600"/>}
+                        bgIcon="bg-rose-100"
+                        borderColor="border-rose-500"
+                    />
+                    <MetricCard
+                        title="Saldo Neto de Caja"
+                        value={formatCurrency(flujoEfectivo.saldoNeto)}
+                        icon={<DollarSign className="text-blue-600"/>}
+                        bgIcon="bg-blue-100"
+                        borderColor="border-blue-500"
+                    />
+                    <MetricCard
+                        title="Efectivo"
+                        value={formatCurrency(flujoEfectivo.porMetodo.Efectivo)}
+                        icon={<DollarSign className="text-amber-600"/>}
+                        bgIcon="bg-amber-100"
+                        borderColor="border-amber-500"
+                    />
+                    <MetricCard
+                        title="Transferencia"
+                        value={formatCurrency(flujoEfectivo.porMetodo.Transferencia)}
+                        icon={<RefreshCw className="text-sky-600"/>}
+                        bgIcon="bg-sky-100"
+                        borderColor="border-sky-500"
+                    />
+                    <MetricCard
+                        title="Tarjeta / QR / Point"
+                        value={formatCurrency(flujoEfectivo.porMetodo.Tarjeta + flujoEfectivo.porMetodo.QR + flujoEfectivo.porMetodo.Point)}
+                        icon={<CreditCard className="text-violet-600"/>}
+                        bgIcon="bg-violet-100"
+                        borderColor="border-violet-500"
+                    />
+                </div>
+
+                {/* Tabla de Movimientos de Caja */}
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-gray-800">Movimientos de Caja</h2>
+                        <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-200">
+                            {flujoEfectivo.movimientos.length} movimientos
+                        </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-100">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Origen</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Método</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {flujoEfectivo.movimientos.map((mov) => (
+                                    <tr key={mov.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                            {mov.fecha?.toLocaleDateString?.('es-AR')}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{mov.origen}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-bold rounded-full ${
+                                                mov.tipo === 'Cobro' ? 'bg-violet-100 text-violet-800' :
+                                                mov.tipo === 'Egreso' ? 'bg-rose-100 text-rose-800' :
+                                                'bg-emerald-100 text-emerald-800'
+                                            }`}>
+                                                {mov.tipo}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">{mov.metodo}</td>
+                                        <td className={`px-6 py-4 text-right text-sm font-bold ${mov.monto < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                            {formatCurrency(mov.monto)}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {flujoEfectivo.movimientos.length === 0 && (
+                                    <tr>
+                                        <td colSpan="5" className="px-6 py-10 text-center text-gray-400 italic">
+                                            No hay movimientos de caja en este período.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                </>
+                )}
             </div>
         </div>
     );

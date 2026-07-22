@@ -34,6 +34,7 @@ const NCIcon = () => <Icono path="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.37
 const BarcodeIcon = (props) => <Icono path="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" d2="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />;
 const XIcon = () => <Icono path="M6 18L18 6M6 6l12 12" />;
 const SearchIcon = () => <Icono path="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />;
+const DownloadIcon = () => <Icono path="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />;
 const CheckIcon = () => <Icono path="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />;
 const CardIcon = () => <Icono path="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-6 2.25h6M12 9.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m-3 3.375l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75m.75-.75l.75.75M4.5 19.5h15c.621 0 1.125-.504 1.125-1.125V8.25c0-.621-.504-1.125-1.125-1.125h-15c-.621 0-1.125.504-1.125 1.125v10.125c0 .621.504 1.125 1.125 1.125z" />;
 
@@ -121,7 +122,7 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
     const tieneCAE = !!venta.afipCAE;
     const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
     const esFacturaA = letra === 'A';
-    const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
+    const tituloComprobante = tieneCAE ? 'FACTURA' : 'REMITO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
     const ptoVtaStr = String(config.ptoVta || '00001').padStart(5, '0');
     const numCompStr = String(venta.afipNumeroComprobante || venta.id?.substring(0, 8) || '0').padStart(8, '0');
@@ -146,11 +147,11 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
         const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
         return `
         <tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
-            <td style="padding: 5px 8px; font-size: 10px; color: #334155;">${item.nombre}</td>
-            <td style="padding: 5px 5px; text-align: center; font-size: 9px; width: 30px; color: #94a3b8;">u.</td>
-            <td style="padding: 5px 5px; text-align: center; font-size: 10px; width: 40px; color: #334155;">${item.quantity}</td>
-            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; color: #334155;">${formatCurrency(precioUnit)}</td>
-            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; font-weight: 700; color: #0f172a;">${formatCurrency(subtotal)}</td>
+            <td style="padding: 6px 8px; font-size: 12px; font-weight: 700; color: #0f172a;">${item.nombre}</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 11px; font-weight: 600; width: 30px; color: #374151;">u.</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 12px; font-weight: 700; width: 40px; color: #0f172a;">${item.quantity}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 600; width: 90px; color: #0f172a;">${formatCurrency(precioUnit)}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 800; width: 90px; color: #0f172a;">${formatCurrency(subtotal)}</td>
         </tr>`;
     }).join('');
 
@@ -158,82 +159,83 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
         <div style="display: flex; gap: 14px; align-items: flex-start;">
             <div>
                 <img src="${qrUrl}" alt="QR AFIP" style="width: 90px; height: 90px; display: block; border: 1px solid #cbd5e1; border-radius: 4px;">
-                <div style="text-align: center; margin-top: 3px; font-size: 7.5px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
+                <div style="text-align: center; margin-top: 3px; font-size: 9px; color: #374151; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
             </div>
             <div style="font-size: 9px; color: #1e293b; line-height: 1.7;">
                 <div style="font-size: 10px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Comprobante Autorizado por ARCA</div>
-                <div><span style="color:#64748b;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
-                <div><span style="color:#64748b;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
+                <div><span style="color:#374151;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
+                <div><span style="color:#374151;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
             </div>
         </div>
     ` : `
         <div style="border: 1px dashed #94a3b8; padding: 8px; text-align: center; background: #f8fafc; border-radius: 4px;">
-            <strong style="font-size: 10px; color: #64748b; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
+            <strong style="font-size: 10px; color: #374151; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
         </div>
     `;
 
     const invoiceHtml = `
-    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
+    <div class="invoice-wrap" style="max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
 
-        <div style="text-align: right; padding: 4px 10px 0; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">ORIGINAL</div>
+        <div style="text-align: right; padding: 4px 10px 0; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #374151;">ORIGINAL</div>
 
-        <div style="border-bottom: 1px solid #cbd5e1; min-height: 120px; position: relative; overflow: hidden;">
-
-            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 68px; min-height: 68px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background: #1e293b; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1;">
-                <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
-                <div style="font-size: 8px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
-            </div>
-            <div style="position: absolute; left: 50%; top: 68px; bottom: 0; border-left: 1px solid #cbd5e1;"></div>
-
-            <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
-                <div style="margin-bottom: 6px;">
-                    ${config.logo
-                        ? `<img src="${config.logo}" alt="Logo" style="max-height: 55px; max-width: 200px; object-fit: contain; object-position: left;">`
-                        : `<div style="font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config.nombreFantasia || config.name || ''}</div>`
-                    }
-                </div>
-                <p style="margin: 0; font-size: 9px; line-height: 1.6; color: #334155;">
-                    <strong style="color:#0f172a;">${config.razonSocial || config.nombreFantasia || config.name || ''}</strong><br>
-                    <span style="color:#64748b;">Domicilio:</span> ${config.domicilioFiscal || ''}<br>
-                    <span style="color:#64748b;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
-                </p>
-            </div>
-
-            <div style="width: 50%; float: right; padding: 12px 12px 10px 44px; box-sizing: border-box;">
-                <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
-                <p style="margin: 0; font-size: 9.5px; line-height: 1.7; color: #334155;">
-                    <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
-                    <span style="color:#64748b;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                    <span style="color:#64748b;">CUIT:</span> ${formatCuit(config.cuit)}
-                    ${config.iibb ? `<br><span style="color:#64748b;">Ing. Brutos:</span> ${config.iibb}` : ''}
-                    ${config.inicioActividades ? `<br><span style="color:#64748b;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
-                </p>
-            </div>
-        </div>
+        <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #cbd5e1;">
+            <tr>
+                <td style="width: 46%; vertical-align: top; padding: 8px 10px 10px 10px;">
+                    <div style="margin: 0 0 6px 0;">
+                        ${config.logo
+                            ? `<img src="${config.logo}" alt="Logo" style="max-height: 100px; max-width: 252px; display: block; object-fit: contain; object-position: left top; opacity: 1; filter: none; -webkit-print-color-adjust: exact;">`
+                            : `<div style="font-size: 24px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config.nombreFantasia || config.name || ''}</div>`
+                        }
+                    </div>
+                    <p style="margin: 0; font-size: 11px; line-height: 1.6; color: #0f172a;">
+                        <strong style="color:#0f172a;">${config.razonSocial || config.nombreFantasia || config.name || ''}</strong><br>
+                        <span style="color:#374151;">Domicilio:</span> ${config.domicilioFiscal || ''}<br>
+                        <span style="color:#374151;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
+                    </p>
+                </td>
+                <td style="width: 68px; vertical-align: top; padding: 0; position: relative;">
+                    <div style="background: #1e293b; width: 100%; min-height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px 0;">
+                        <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
+                        <div style="font-size: 9px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
+                    </div>
+                    <div style="position: absolute; left: 50%; top: 68px; bottom: 0; width: 1px; background: #cbd5e1; transform: translateX(-50%);"></div>
+                </td>
+                <td style="width: 46%; vertical-align: top; padding: 8px 12px 10px 14px;">
+                    <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
+                    <p style="margin: 0; font-size: 11px; line-height: 1.7; color: #0f172a;">
+                        <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
+                        <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                        <span style="color:#374151;">CUIT:</span> ${formatCuit(config.cuit)}
+                        ${config.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
+                        ${config.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                    </p>
+                </td>
+            </tr>
+        </table>
 
         <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; font-size: 9px; background: #f8fafc; line-height: 1.5;">
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cliente</div>
-                        <strong style="text-transform: uppercase; font-size: 10px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cliente</div>
+                        <strong style="text-transform: uppercase; font-size: 12px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
                     </td>
                     <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">CUIT / DNI</div>
-                        <strong style="font-size: 10px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento || clientDetails.cuit || clientDetails.dni)}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">CUIT / DNI</div>
+                        <strong style="font-size: 12px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento || clientDetails.cuit || clientDetails.dni)}</strong>
                     </td>
                     <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cond. Venta</div>
-                        <strong style="font-size: 10px; color: #0f172a;">${condicionVenta}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cond. Venta</div>
+                        <strong style="font-size: 12px; color: #0f172a;">${condicionVenta}</strong>
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="3" style="padding-top: 3px; vertical-align: top; color: #64748b;">
-                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Domicilio:</span>
-                        <span style="font-size: 9px; color: #334155;"> ${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
+                    <td colspan="3" style="padding-top: 3px; vertical-align: top; color: #374151;">
+                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Domicilio:</span>
+                        <span style="font-size: 11px; color: #0f172a;"> ${clientDetails.direccion || 'N/A'} (${zonaNombre})</span>
                         &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
-                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Cond. IVA:</span>
-                        <span style="font-size: 9px; color: #334155;"> ${condIvaTexto}</span>
+                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Cond. IVA:</span>
+                        <span style="font-size: 11px; color: #0f172a;"> ${condIvaTexto}</span>
                     </td>
                 </tr>
             </table>
@@ -242,54 +244,67 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
         <div>
             <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
                 <thead>
-                    <tr style="background: #1e293b;">
-                        <th style="padding: 6px 8px; text-align: left; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
-                        <th style="padding: 6px 5px; text-align: center; width: 30px; color: #94a3b8; font-weight: 600; font-size: 9px; text-transform: uppercase;">U.M.</th>
-                        <th style="padding: 6px 5px; text-align: center; width: 40px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Cant.</th>
-                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
-                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Importe</th>
+                    <tr style="border-bottom: 2.5px solid #0f172a; border-top: 1px solid #cbd5e1;">
+                        <th style="padding: 7px 8px; text-align: left; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
+                        <th style="padding: 7px 5px; text-align: center; width: 30px; color: #64748b; font-weight: 700; font-size: 11px; text-transform: uppercase;">U.M.</th>
+                        <th style="padding: 7px 5px; text-align: center; width: 40px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Cant.</th>
+                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
+                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Importe</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
             </table>
         </div>
 
-        <div style="border-top: 1px solid #cbd5e1; display: flex;">
-            <div style="width: 60%; padding: 12px; box-sizing: border-box;">
+        <div class="invoice-footer">
+            <div style="width: 60%; padding: 12px;">
                 ${bloquePie}
             </div>
             <div style="width: 40%; border-left: 1px solid #cbd5e1;">
                 <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
                     ${esFacturaA ? `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Neto Gravado (21%):</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Neto Gravado (21%):</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta / 1.21)}</td>
                     </tr>
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">IVA (21%):</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">IVA (21%):</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
                     </tr>
                     ` : `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Subtotal:</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta)}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Subtotal:</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                     `}
-                    <tr style="background: #1e293b;">
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">TOTAL:</td>
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">${formatCurrency(venta.totalVenta)}</td>
+                    <tr style="border-top: 2.5px solid #0f172a;">
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px;">TOTAL:</td>
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                 </table>
             </div>
         </div>
     </div>`;
 
+    const bodyContent = invoiceHtml;
+
     printHTML(`<html><head><title>${tituloComprobante} ${ptoVtaStr}-${numCompStr}</title><style>
-        body { margin: 20px; font-family: 'Arial Narrow', Arial, sans-serif; }
-        @media print { body { margin: 0; } }
+        * { box-sizing: border-box; }
+        body { margin: 10px; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
-    </style></head><body>${invoiceHtml}</body></html>`);
+        .invoice-footer { display: flex; border-top: 2px solid #1e293b; background: #fff; }
+        img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; filter: none !important; opacity: 1 !important; }
+        @media print {
+            body { margin: 0; padding: 0; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; filter: none !important; opacity: 1 !important; }
+            ${tieneCAE ? `
+            .invoice-wrap { padding-bottom: 145px; }
+            .invoice-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 2px solid #1e293b; z-index: 100; }
+            ` : ''}
+        }
+    </style></head><body>${bodyContent}</body></html>`);
 };
 
 const CollectSaleModal = ({ total, onConfirm, onClose }) => {
@@ -424,7 +439,8 @@ function Facturacion() {
     
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
-    const [filterDate, setFilterDate] = useState(''); 
+    const [filterDate, setFilterDate] = useState('');
+    const [filterMonth, setFilterMonth] = useState('');
 
     const { onTenantSnapshot, addTenantDoc, updateTenantDoc, deleteTenantDoc, tenantId, getTenantCollection, getTenantDoc, db } = useFirestore();
 
@@ -500,16 +516,47 @@ function Facturacion() {
             const clienteNombre = venta.clienteNombre || (clientes.find(c => c.id === venta.clienteId)?.nombre);
             const vendedorNombre = venta.vendedorNombre || (vendedores.find(v => v.id === venta.vendedorId)?.nombreCompleto);
             const matchesSearch = searchTerm === '' || (clienteNombre && clienteNombre.toLowerCase().includes(searchTermLower)) || (vendedorNombre && vendedorNombre.toLowerCase().includes(searchTermLower));
-            const matchesStatus = filterStatus === 'Todos' ? true : venta.estado === filterStatus;
+            const matchesStatus = filterStatus === 'Todos' ? true
+                : filterStatus === 'Factura Electrónica' ? !!venta.afipCAE
+                : venta.estado === filterStatus;
             let matchesDate = true;
             if (filterDate) {
                 const startOfDay = new Date(filterDate); startOfDay.setUTCHours(0, 0, 0, 0);
                 const endOfDay = new Date(filterDate); endOfDay.setUTCHours(23, 59, 59, 999);
                 matchesDate = venta.fecha >= startOfDay && venta.fecha <= endOfDay;
             }
-            return matchesSearch && matchesStatus && matchesDate;
+            let matchesMonth = true;
+            if (filterMonth) {
+                const [y, m] = filterMonth.split('-').map(Number);
+                const start = new Date(y, m - 1, 1);
+                const end = new Date(y, m, 0, 23, 59, 59, 999);
+                matchesMonth = venta.fecha >= start && venta.fecha <= end;
+            }
+            return matchesSearch && matchesStatus && matchesDate && matchesMonth;
         });
-    }, [ventas, searchTerm, filterStatus, filterDate, clientes, vendedores]);
+    }, [ventas, searchTerm, filterStatus, filterDate, filterMonth, clientes, vendedores]);
+
+    const afipStats = useMemo(() => {
+        const afipVentas = filterStatus === 'Factura Electrónica'
+            ? filteredVentas
+            : filteredVentas.filter(v => v.afipCAE);
+        const total = afipVentas.reduce((s, v) => s + (v.totalVenta || 0), 0);
+        return { count: afipVentas.length, total, ventas: afipVentas };
+    }, [filteredVentas, filterStatus]);
+
+    const MONTHS = useMemo(() => {
+        const arr = [{ value: '', label: 'Todos los períodos' }];
+        const now = new Date();
+        for (let i = 0; i < 24; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const label = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+            arr.push({
+                value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+                label: label.charAt(0).toUpperCase() + label.slice(1),
+            });
+        }
+        return arr;
+    }, []);
     
     const paginatedVentas = useMemo(() => filteredVentas.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredVentas, currentPage, itemsPerPage]);
     const totalPages = Math.ceil(filteredVentas.length / itemsPerPage);
@@ -653,6 +700,44 @@ function Facturacion() {
         } catch (err) {
             toast.error('Error al actualizar estado');
         }
+    };
+
+    // --- EXPORT LIBRO IVA VENTAS ---
+    const handleExportLibroIVA = () => {
+        const { ventas: afipVentas, count } = afipStats;
+        if (count === 0) { toast.error('No hay facturas electrónicas en el período seleccionado.'); return; }
+
+        const headers = ['Fecha', 'Tipo', 'Nro. Comprobante', 'Pto. Vta', 'CAE', 'Vto. CAE', 'Cliente', 'CUIT/DNI', 'Neto Gravado', 'IVA 21%', 'Total'];
+        const rows = afipVentas.map(v => {
+            const cliente = clientes.find(c => c.id === v.clienteId);
+            const letra = v.afipLetra || 'B';
+            const esA = letra === 'A';
+            const neto = esA ? (v.totalVenta || 0) / 1.21 : (v.totalVenta || 0);
+            const iva = esA ? (v.totalVenta || 0) - neto : 0;
+            return [
+                v.fecha instanceof Date ? v.fecha.toLocaleDateString('es-AR') : '',
+                `Factura ${letra}`,
+                String(v.afipNumeroComprobante || v.numeroFactura || '').padStart(8, '0'),
+                String(v.afipPtoVta || 1).padStart(4, '0'),
+                v.afipCAE || '',
+                v.afipVtoCAE || '',
+                v.clienteNombre || cliente?.nombre || '',
+                (v.clienteCuit || cliente?.numeroDocumento || '').replace(/\D/g, ''),
+                neto.toFixed(2),
+                iva.toFixed(2),
+                (v.totalVenta || 0).toFixed(2),
+            ].join(';');
+        });
+
+        const csv = '﻿' + [headers.join(';'), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `libro_iva_ventas_${filterMonth || filterDate || 'periodo'}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Libro IVA exportado — ${count} comprobantes.`);
     };
 
     // --- GUARDADO Y FACTURACIÓN ---
@@ -1051,27 +1136,72 @@ function Facturacion() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h2 className="text-xl font-bold text-slate-800">Historial de Operaciones</h2>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={handleDeleteAllInvoices} disabled={isDeleting} className="px-3 py-2 bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                            <TrashIcon className="w-4 h-4"/> {isDeleting ? 'BORRANDO...' : 'RESET TOTAL'}
-                        </button>
-                        <div className="relative group">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><SearchIcon /></span>
-                            <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none w-40 md:w-60 transition-all"/>
+                <div className="p-6 border-b border-slate-100 flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h2 className="text-xl font-bold text-slate-800">Historial de Operaciones</h2>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="relative group">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><SearchIcon /></span>
+                                <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none w-40 md:w-52 transition-all"/>
+                            </div>
+                            <select
+                                value={filterStatus}
+                                onChange={e => setFilterStatus(e.target.value)}
+                                className={`px-4 py-2 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer ${filterStatus === 'Factura Electrónica' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600'}`}
+                            >
+                                <option>Todos</option>
+                                <option>Factura Electrónica</option>
+                                <option>Web: Pendiente</option>
+                                <option>Pagada</option>
+                                <option>Adeuda</option>
+                                <option>Pendiente de Entrega</option>
+                                <option>Repartiendo</option>
+                                <option>Anulada</option>
+                            </select>
+                            <select
+                                value={filterMonth}
+                                onChange={e => { setFilterMonth(e.target.value); setFilterDate(''); }}
+                                className={`px-4 py-2 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer ${filterMonth ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600'}`}
+                            >
+                                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                            <input
+                                type="date"
+                                value={filterDate}
+                                onChange={e => { setFilterDate(e.target.value); setFilterMonth(''); }}
+                                className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
                         </div>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
-                            <option>Todos</option>
-                            <option>Web: Pendiente</option>
-                            <option>Pagada</option>
-                            <option>Adeuda</option>
-                            <option>Pendiente de Entrega</option>
-                            <option>Repartiendo</option>
-                            <option>Anulada</option>
-                        </select>
-                        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"/>
                     </div>
+
+                    {/* RESUMEN AFIP DEL PERÍODO */}
+                    {(filterMonth || filterStatus === 'Factura Electrónica') && (
+                        <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-4 rounded-2xl border ${afipStats.count > 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${afipStats.count > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                    <ArcaIcon />
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                                        Facturas Electrónicas · {filterMonth ? MONTHS.find(m => m.value === filterMonth)?.label : 'Filtro activo'}
+                                    </p>
+                                    <div className="flex items-baseline gap-3 mt-0.5">
+                                        <span className={`text-2xl font-black ${afipStats.count > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>
+                                            {formatCurrency(afipStats.total)}
+                                        </span>
+                                        <span className="text-xs font-bold text-slate-400">{afipStats.count} comprobante{afipStats.count !== 1 ? 's' : ''}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleExportLibroIVA}
+                                disabled={afipStats.count === 0}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                <DownloadIcon /> Exportar Libro IVA
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="overflow-x-auto">
@@ -1105,7 +1235,7 @@ function Facturacion() {
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${statusColor}`}>
                                             {venta.tipo === 'devolucion' ? 'Devolución' : venta.estado}
                                         </span>
-                                        {venta.facturaAfip && !venta.afipCAE && (
+                                        {venta.facturaAfip && !venta.afipCAE && venta.estado !== 'Pendiente de Entrega' && (
                                             <span title="Factura guardada sin CAE de AFIP" className="ml-1.5 px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded border border-red-200 uppercase cursor-help">Sin CAE ⚠</span>
                                         )}
                                     </td>

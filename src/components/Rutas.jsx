@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
-import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, writeBatch, Timestamp, addDoc, updateDoc, runTransaction, orderBy, deleteDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp } from 'firebase/app';
 import { useFirestore } from '../hooks/useFirestore';
 import { useTenant } from '../contexts/TenantContext';
+import { useShift } from '../contexts/ShiftContext';
 import { toast } from 'react-toastify';
 import RouteMapMonitor from './RouteMapMonitor';
 
@@ -24,6 +25,7 @@ const ChevronDownIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000
 const EditIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
 const EyeIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
 const TrashIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+const ClipboardCheckIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M9 14l2 2 4-4"></path></svg>;
 
 // --- UTILIDADES ---
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
@@ -50,62 +52,221 @@ const printHTML = (htmlContent) => {
 };
 
 // --- GENERACIÓN DE PDFS ---
-const generateLoadingReportHTML = (invoices, routeName, repartidorNombre) => {
+const normalizeKey = (str) => (str || '').toString().trim().toLowerCase();
+
+const generateLoadingReportHTML = (invoices, routeName, repartidorNombre, productCategoryLookup = { byId: new Map(), byName: new Map() }, zonaMap = new Map()) => {
+    const resolveCategoria = (item) => {
+        return productCategoryLookup.byId.get(item.productId)
+            ?? productCategoryLookup.byName.get(normalizeKey(item.nombre))
+            ?? 'Sin Categoría';
+    };
+
+    const zonasCubiertas = Array.from(new Set(invoices.map(inv => zonaMap.get(inv.zonaId) || 'Sin Zona'))).sort((a, b) => a.localeCompare(b));
+
     const productSummary = new Map();
     invoices.forEach(invoice => {
         (invoice.items || []).forEach(item => {
-            const key = item.productId || item.nombre; 
+            const key = item.productId || item.nombre;
             if (!key) return;
+            const subtotalItem = (item.precio || 0) * (item.quantity || 0);
             const existing = productSummary.get(key);
-            if (existing) { existing.quantity += item.quantity; } else { productSummary.set(key, { nombre: item.nombre, quantity: item.quantity }); }
+            if (existing) {
+                existing.quantity += item.quantity;
+                existing.subtotal += subtotalItem;
+            } else {
+                productSummary.set(key, { nombre: item.nombre, quantity: item.quantity, subtotal: subtotalItem, categoria: resolveCategoria(item) });
+            }
         });
     });
-    const productList = Array.from(productSummary.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    const itemsRows = productList.map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
-    return `<html><head><title>Reporte de Carga - ${routeName}</title><style>body{font-family: Arial, sans-serif; margin: 20px;} h1, h2, h3 {color: #333;} table{width: 100%; border-collapse: collapse; margin-top: 20px;} th, td{padding: 12px; text-align: left;} thead{background-color: #f2f2f2;}</style></head><body><h1>Reporte de Carga para Depósito</h1><h2>Ruta: ${routeName}</h2><h3>Repartidor: ${repartidorNombre}</h3><p>Fecha de Emisión: ${new Date().toLocaleString('es-AR')}</p><hr/><table><thead><tr><th style="width:150px;">Cantidad a Cargar</th><th>Producto</th></tr></thead><tbody>${itemsRows}</tbody></table></body></html>`;
+
+    // Agrupamos por categoría para que el depósito arme la carga sector por sector
+    const groups = new Map();
+    Array.from(productSummary.values()).forEach(p => {
+        if (!groups.has(p.categoria)) groups.set(p.categoria, []);
+        groups.get(p.categoria).push(p);
+    });
+    const categoryNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+    const totalUnidades = Array.from(productSummary.values()).reduce((acc, p) => acc + (p.quantity || 0), 0);
+    const totalGeneral = Array.from(productSummary.values()).reduce((acc, p) => acc + (p.subtotal || 0), 0);
+
+    const itemsRows = categoryNames.map(catNombre => {
+        const catHeaderRow = `<tr><td class="cell cat-cell" colspan="4">${catNombre}</td></tr>`;
+        const productos = groups.get(catNombre).sort((a, b) => a.nombre.localeCompare(b.nombre));
+        const rows = productos.map(item => {
+            const precioUnit = item.quantity ? item.subtotal / item.quantity : 0;
+            return `
+            <tr>
+                <td class="cell">${item.nombre}</td>
+                <td class="cell cell-center cell-strong">${item.quantity}</td>
+                <td class="cell cell-right">${formatCurrency(precioUnit)}</td>
+                <td class="cell cell-right cell-strong">${formatCurrency(item.subtotal)}</td>
+            </tr>`;
+        }).join('');
+        return catHeaderRow + rows;
+    }).join('');
+
+    return `
+    <html>
+    <head><title>Reporte de Carga - ${routeName}</title>
+    <style>
+        @page { size: A4; margin: 8mm 6mm; }
+        * { box-sizing: border-box; }
+        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 14px;}
+        h1, h2 {color: #0f172a; margin: 0; line-height: 1.2;}
+        table{width: 100%; border-collapse: collapse; table-layout: fixed;}
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th, .cell { border: 1px solid #cbd5e1; }
+        .cell { padding: 3px 7px; font-size: 14px; line-height: 1.35; font-weight: 700; text-transform: uppercase; }
+        .cell-center { text-align: center; }
+        .cell-strong { font-weight: 900; }
+        .cat-cell {
+            background: none; color: #0f172a; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 0.5px; font-size: 15px; padding: 7px 5px 4px 0;
+            border: none; border-bottom: 1.5px solid #0f172a;
+        }
+        thead th{
+            background: none; color: #0f172a; border: none; border-bottom: 1.5px solid #0f172a;
+            padding: 6px 7px; text-align: left; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 0.4px; font-weight: 900;
+        }
+    </style>
+    </head>
+    <body>
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 5px;">
+            <div>
+                <h1 style="font-size: 13px;">Reporte de Carga para Depósito</h1>
+                <h2 style="font-size: 9px; font-weight: normal; color: #475569; margin-top: 1px;">${routeName} &nbsp;·&nbsp; Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h2>
+            </div>
+            <div style="text-align:right; font-size: 7.5px; color: #94a3b8;">
+                Emitido: ${new Date().toLocaleString('es-AR')}<br/>
+                Unidades totales: <strong style="color:#0f172a;">${totalUnidades}</strong><br/>
+                Zonas: <strong style="color:#0f172a;">${zonasCubiertas.join(', ')}</strong>
+            </div>
+        </div>
+        <table>
+            <colgroup>
+                <col />
+                <col style="width: 60px;" />
+                <col style="width: 85px;" />
+                <col style="width: 90px;" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th style="text-align: center;">Cant.</th>
+                    <th style="text-align: right;">P. Unit.</th>
+                    <th style="text-align: right;">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itemsRows}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total General (por las dudas):</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 11px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalGeneral)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </body>
+    </html>
+    `;
 };
 
-const generateRouteListHTML = (invoices, routeName, repartidorNombre) => {
+const generateRouteListHTML = (invoices, routeName, repartidorNombre, zonaMap = new Map()) => {
     let totalRuta = 0;
-    const clientRows = invoices.map((inv, index) => {
-        totalRuta += inv.totalVenta || 0;
-        return `
-            <tr>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; width: 40px; font-size: 12px;">${index + 1}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; font-size: 14px;">${inv.clienteNombre}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px; color: #555;">${inv.clienteDireccion || 'S/D'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; font-size: 14px;">${formatCurrency(inv.totalVenta)}</td>
-            </tr>
-        `;
+
+    // Resolvemos la zona de cada factura y agrupamos el listado por zona
+    const invoicesConZona = invoices.map(inv => ({ ...inv, zonaNombre: zonaMap.get(inv.zonaId) || 'Sin Zona' }));
+    const zonasCubiertas = Array.from(new Set(invoicesConZona.map(inv => inv.zonaNombre))).sort((a, b) => a.localeCompare(b));
+
+    const groups = new Map();
+    invoicesConZona.forEach(inv => {
+        if (!groups.has(inv.zonaNombre)) groups.set(inv.zonaNombre, []);
+        groups.get(inv.zonaNombre).push(inv);
+    });
+    const zoneNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+
+    let parada = 0;
+    const clientRows = zoneNames.map(zonaNombre => {
+        const zoneHeaderRow = `<tr><td class="cell zone-cell" colspan="5">${zonaNombre}</td></tr>`;
+        const rows = groups.get(zonaNombre).map(inv => {
+            parada++;
+            totalRuta += inv.totalVenta || 0;
+            const zebra = parada % 2 === 0 ? 'background:#f1f5f9;' : '';
+            return `
+                <tr style="${zebra}">
+                    <td class="cell cell-center">${parada}</td>
+                    <td class="cell cell-strong">${inv.clienteNombre}${inv.tipo === 'devolucion' ? ' <span class="tag-dev">DEV</span>' : ''}</td>
+                    <td class="cell cell-muted">${inv.clienteDireccion || 'S/D'}</td>
+                    <td class="cell cell-right cell-strong">${formatCurrency(inv.totalVenta)}</td>
+                    <td class="cell cell-center cell-firma"></td>
+                </tr>
+            `;
+        }).join('');
+        return zoneHeaderRow + rows;
     }).join('');
 
     return `
     <html>
     <head><title>Listado de Ruta - ${routeName}</title>
     <style>
-        body{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; color: #333;}
-        h1, h2, h3 {color: #1e293b; margin: 5px 0;}
-        table{width: 100%; border-collapse: collapse; margin-top: 20px;}
-        th, td{padding: 10px; text-align: left;}
-        thead{background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;}
-        th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
+        @page { size: A4; margin: 8mm 6mm; }
+        * { box-sizing: border-box; }
+        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 10px;}
+        h1, h2 {color: #0f172a; margin: 0; line-height: 1.2;}
+        table{width: 100%; border-collapse: collapse; table-layout: fixed;}
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th, .cell { border: 1px solid #cbd5e1; }
+        .cell { padding: 2px 6px; font-size: 10px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell-center { text-align: center; }
+        .cell-right { text-align: right; }
+        .cell-strong { font-weight: 700; }
+        .cell-muted { color: #64748b; }
+        .cell-firma { width: 55px; }
+        .tag-dev { font-size: 7.5px; font-weight: 700; color: #c2410c; background: #ffedd5; border: 1px solid #fed7aa; border-radius: 3px; padding: 0 3px; }
+        .zone-cell {
+            background: #e2e8f0; color: #0f172a; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 0.4px; font-size: 9.5px; padding: 3px 6px; border: 1px solid #cbd5e1;
+        }
+        thead th{
+            background-color: #0f172a; color: #fff; border: 1px solid #0f172a;
+            padding: 4px 6px; text-align: left; font-size: 8.5px;
+            text-transform: uppercase; letter-spacing: 0.4px;
+        }
+        tfoot td { border: 1px solid #cbd5e1; padding: 5px; }
     </style>
     </head>
     <body>
-        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 10px;">
-            <h1 style="font-size: 24px;">Hoja de Ruta (Visitas y Cobranzas)</h1>
-            <h2 style="font-size: 16px; color: #475569;">${routeName}</h2>
-            <h3 style="font-size: 14px; font-weight: normal;">Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h3>
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 6px;">
+            <div>
+                <h1 style="font-size: 14px;">Hoja de Ruta</h1>
+                <h2 style="font-size: 10px; font-weight: normal; color: #475569; margin-top: 1px;">${routeName} &nbsp;·&nbsp; Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h2>
+            </div>
+            <div style="text-align:right; font-size: 8px; color: #94a3b8;">
+                Emitido: ${new Date().toLocaleString('es-AR')}<br/>
+                Paradas: <strong style="color:#0f172a;">${invoices.length}</strong><br/>
+                Zonas: <strong style="color:#0f172a;">${zonasCubiertas.join(', ')}</strong>
+            </div>
         </div>
-        <p style="font-size: 10px; color: #94a3b8; text-align: right; margin-top: -30px;">Emitido: ${new Date().toLocaleString('es-AR')}</p>
-        
+
         <table>
+            <colgroup>
+                <col style="width: 28px;" />
+                <col style="width: 30%;" />
+                <col />
+                <col style="width: 90px;" />
+                <col style="width: 55px;" />
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="text-align: center;">Parada</th>
+                    <th style="text-align: center;">#</th>
                     <th>Cliente</th>
                     <th>Dirección</th>
                     <th style="text-align: right;">Monto a Cobrar</th>
+                    <th style="text-align: center;">Firma</th>
                 </tr>
             </thead>
             <tbody>
@@ -113,8 +274,8 @@ const generateRouteListHTML = (invoices, routeName, repartidorNombre) => {
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3" style="text-align: right; padding: 15px; font-size: 14px; color: #64748b; text-transform: uppercase;">Total Esperado en Ruta:</td>
-                    <td style="text-align: right; padding: 15px; font-size: 20px; font-weight: 900; background: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px solid #e2e8f0;">${formatCurrency(totalRuta)}</td>
+                    <td colspan="3" style="text-align: right; font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total Esperado en Ruta:</td>
+                    <td colspan="2" style="text-align: right; font-size: 12px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalRuta)}</td>
                 </tr>
             </tfoot>
         </table>
@@ -171,7 +332,7 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
     const tieneCAE = !!venta.afipCAE;
     const letra = tieneCAE ? (venta.afipLetra || 'C') : 'X';
     const esFacturaA = letra === 'A';
-    const tituloComprobante = tieneCAE ? 'FACTURA' : 'PRESUPUESTO';
+    const tituloComprobante = tieneCAE ? 'FACTURA' : 'REMITO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
 
     const ptoVtaStr = String(config?.ptoVta || "00001").padStart(5, '0');
@@ -197,151 +358,143 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
         const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
         return `
         <tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
-            <td style="padding: 5px 8px; font-size: 10px; color: #334155;">${item.nombre}</td>
-            <td style="padding: 5px 5px; text-align: center; font-size: 9px; width: 30px; color: #94a3b8;">u.</td>
-            <td style="padding: 5px 5px; text-align: center; font-size: 10px; width: 40px; color: #334155;">${item.quantity}</td>
-            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; color: #334155;">${formatCurrency(precioUnit)}</td>
-            <td style="padding: 5px 8px; text-align: right; font-size: 10px; width: 90px; font-weight: 700; color: #0f172a;">${formatCurrency(subtotal)}</td>
+            <td style="padding: 6px 8px; font-size: 12px; font-weight: 700; color: #0f172a;">${item.nombre}</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 11px; font-weight: 600; width: 30px; color: #374151;">u.</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 12px; font-weight: 700; width: 40px; color: #0f172a;">${item.quantity}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 600; width: 90px; color: #0f172a;">${formatCurrency(precioUnit)}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 800; width: 90px; color: #0f172a;">${formatCurrency(subtotal)}</td>
         </tr>`;
     }).join('');
 
-    let bloquePie = '';
-    if (tieneCAE) {
-        bloquePie = `
-            <div style="display: flex; gap: 14px; align-items: flex-start;">
-                <div>
-                    <img src="${qrUrl}" alt="QR AFIP" style="width: 90px; height: 90px; display: block; border: 1px solid #cbd5e1; border-radius: 4px;">
-                    <div style="text-align: center; margin-top: 3px; font-size: 7.5px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
-                </div>
-                <div style="font-size: 9px; color: #1e293b; line-height: 1.7;">
-                    <div style="font-size: 10px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Comprobante Autorizado por ARCA</div>
-                    <div><span style="color:#64748b;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
-                    <div><span style="color:#64748b;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
-                </div>
+    const bloquePie = tieneCAE ? `
+        <div style="display: flex; gap: 14px; align-items: flex-start;">
+            <div>
+                <img src="${qrUrl}" alt="QR AFIP" style="width: 90px; height: 90px; display: block; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <div style="text-align: center; margin-top: 3px; font-size: 9px; color: #374151; font-weight: 600; letter-spacing: 0.5px;">ARCA | AFIP</div>
             </div>
-        `;
-    } else {
-        bloquePie = `
-            <div style="border: 1px dashed #94a3b8; padding: 8px; text-align: center; background: #f8fafc; border-radius: 4px;">
-                <strong style="font-size: 10px; color: #64748b; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
-            </div>
-        `;
-    }
-
-    return `
-    <div style="font-family: 'Arial Narrow', Arial, sans-serif; max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
-
-        <div style="text-align: right; padding: 4px 10px 0; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">ORIGINAL</div>
-
-        <div style="border-bottom: 1px solid #cbd5e1; min-height: 120px; position: relative; overflow: hidden;">
-
-            <div style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 68px; min-height: 68px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background: #1e293b; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1;">
-                <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
-                <div style="font-size: 8px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
-            </div>
-
-            <div style="position: absolute; left: 50%; top: 68px; bottom: 0; border-left: 1px solid #cbd5e1;"></div>
-
-            <div style="width: 50%; float: left; padding: 10px; box-sizing: border-box;">
-                <div style="margin-bottom: 6px;">
-                    ${config?.logo
-                        ? `<img src="${config.logo}" alt="Logo" style="max-height: 55px; max-width: 200px; object-fit: contain; object-position: left;">`
-                        : `<div style="font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config?.nombreFantasia || config?.name || ''}</div>`
-                    }
-                </div>
-                <p style="margin: 0; font-size: 9px; line-height: 1.6; color: #334155;">
-                    <strong style="color:#0f172a;">${config?.razonSocial || config?.nombreFantasia || config?.name || ''}</strong><br>
-                    <span style="color:#64748b;">Domicilio:</span> ${config?.domicilioFiscal || ''}<br>
-                    <span style="color:#64748b;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
-                </p>
-            </div>
-
-            <div style="width: 50%; float: right; padding: 12px 12px 10px 44px; box-sizing: border-box;">
-                <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
-                <p style="margin: 0; font-size: 9.5px; line-height: 1.7; color: #334155;">
-                    <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
-                    <span style="color:#64748b;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                    <span style="color:#64748b;">CUIT:</span> ${formatCuit(config?.cuit)}
-                    ${config?.iibb ? `<br><span style="color:#64748b;">Ing. Brutos:</span> ${config.iibb}` : ''}
-                    ${config?.inicioActividades ? `<br><span style="color:#64748b;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
-                </p>
+            <div style="font-size: 9px; color: #1e293b; line-height: 1.7;">
+                <div style="font-size: 10px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Comprobante Autorizado por ARCA</div>
+                <div><span style="color:#374151;">CAE N°:</span> <strong>${venta.afipCAE}</strong></div>
+                <div><span style="color:#374151;">Vto. CAE:</span> <strong>${vtoCaeFormateado}</strong></div>
             </div>
         </div>
+    ` : `
+        <div style="border: 1px dashed #94a3b8; padding: 8px; text-align: center; background: #f8fafc; border-radius: 4px;">
+            <strong style="font-size: 10px; color: #374151; letter-spacing: 1px;">DOCUMENTO NO VÁLIDO COMO FACTURA</strong>
+        </div>
+    `;
 
-        <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; font-size: 9px; background: #f8fafc; line-height: 1.5;">
+    return `
+    <div class="invoice-wrap" style="max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
+
+        <div style="text-align: right; padding: 4px 10px 0; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #374151;">ORIGINAL</div>
+
+        <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #cbd5e1;">
+            <tr>
+                <td style="width: 46%; vertical-align: top; padding: 8px 10px 10px 10px;">
+                    <div style="margin: 0 0 6px 0;">
+                        ${config?.logo
+                            ? `<img src="${config.logo}" alt="Logo" style="max-height: 100px; max-width: 252px; display: block; object-fit: contain; object-position: left top; opacity: 1; filter: none; -webkit-print-color-adjust: exact;">`
+                            : `<div style="font-size: 24px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config?.nombreFantasia || config?.name || ''}</div>`
+                        }
+                    </div>
+                    <p style="margin: 0; font-size: 11px; line-height: 1.6; color: #0f172a;">
+                        <strong style="color:#0f172a;">${config?.razonSocial || config?.nombreFantasia || config?.name || ''}</strong><br>
+                        <span style="color:#374151;">Domicilio:</span> ${config?.domicilioFiscal || ''}<br>
+                        <span style="color:#374151;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
+                    </p>
+                </td>
+                <td style="width: 68px; vertical-align: top; padding: 0; position: relative;">
+                    <div style="background: #1e293b; width: 100%; min-height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px 0;">
+                        <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
+                        <div style="font-size: 9px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
+                    </div>
+                    <div style="position: absolute; left: 50%; top: 68px; bottom: 0; width: 1px; background: #cbd5e1; transform: translateX(-50%);"></div>
+                </td>
+                <td style="width: 46%; vertical-align: top; padding: 8px 12px 10px 14px;">
+                    <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
+                    <p style="margin: 0; font-size: 11px; line-height: 1.7; color: #0f172a;">
+                        <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
+                        <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                        <span style="color:#374151;">CUIT:</span> ${formatCuit(config?.cuit)}
+                        ${config?.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
+                        ${config?.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                    </p>
+                </td>
+            </tr>
+        </table>
+
+        <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; background: #f8fafc; line-height: 1.5;">
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cliente</div>
-                        <strong style="text-transform: uppercase; font-size: 10px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cliente</div>
+                        <strong style="text-transform: uppercase; font-size: 12px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
                     </td>
                     <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">CUIT / DNI</div>
-                        <strong style="font-size: 10px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento)}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">CUIT / DNI</div>
+                        <strong style="font-size: 12px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento)}</strong>
                     </td>
                     <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px;">Cond. Venta</div>
-                        <strong style="font-size: 10px; color: #0f172a;">${condicionVenta}</strong>
+                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cond. Venta</div>
+                        <strong style="font-size: 12px; color: #0f172a;">${condicionVenta}</strong>
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="3" style="padding-top: 3px; vertical-align: top; color: #64748b;">
-                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Domicilio:</span>
-                        <span style="font-size: 9px; color: #334155;"> ${clientDetails.direccion || 'N/A'}</span>
+                    <td colspan="3" style="padding-top: 3px; vertical-align: top;">
+                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Domicilio:</span>
+                        <span style="font-size: 11px; color: #0f172a;"> ${clientDetails.direccion || 'N/A'}</span>
                         &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
-                        <span style="font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px;">Cond. IVA:</span>
-                        <span style="font-size: 9px; color: #334155;"> ${condIvaTexto}</span>
+                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Cond. IVA:</span>
+                        <span style="font-size: 11px; color: #0f172a;"> ${condIvaTexto}</span>
                     </td>
                 </tr>
             </table>
         </div>
 
         <div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+            <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr style="background: #1e293b;">
-                        <th style="padding: 6px 8px; text-align: left; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
-                        <th style="padding: 6px 5px; text-align: center; width: 30px; color: #94a3b8; font-weight: 600; font-size: 9px; text-transform: uppercase;">U.M.</th>
-                        <th style="padding: 6px 5px; text-align: center; width: 40px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Cant.</th>
-                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
-                        <th style="padding: 6px 8px; text-align: right; width: 90px; color: #fff; font-weight: 700; font-size: 9px; text-transform: uppercase;">Importe</th>
+                    <tr style="border-bottom: 2.5px solid #0f172a; border-top: 1px solid #cbd5e1;">
+                        <th style="padding: 7px 8px; text-align: left; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
+                        <th style="padding: 7px 5px; text-align: center; width: 30px; color: #64748b; font-weight: 700; font-size: 11px; text-transform: uppercase;">U.M.</th>
+                        <th style="padding: 7px 5px; text-align: center; width: 40px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Cant.</th>
+                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
+                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Importe</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${itemsHtml}
-                </tbody>
+                <tbody>${itemsHtml}</tbody>
             </table>
         </div>
 
-        <div style="border-top: 1px solid #cbd5e1; display: flex;">
-            <div style="width: 60%; padding: 12px; box-sizing: border-box;">
+        <div class="invoice-footer">
+            <div style="width: 60%; padding: 12px;">
                 ${bloquePie}
             </div>
             <div style="width: 40%; border-left: 1px solid #cbd5e1;">
                 <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
                     ${esFacturaA ? `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Neto Gravado (21%):</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Neto Gravado (21%):</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta / 1.21)}</td>
                     </tr>
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">IVA (21%):</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">IVA (21%):</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
                     </tr>
                     ` : `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #64748b; font-size: 10px;">Subtotal:</td>
-                        <td style="padding: 5px 12px 5px 8px; text-align: right; color: #334155;">${formatCurrency(venta.totalVenta)}</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Subtotal:</td>
+                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                     `}
-                    <tr style="background: #1e293b;">
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">TOTAL:</td>
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 13px; font-weight: 900; color: #fff;">${formatCurrency(venta.totalVenta)}</td>
+                    <tr style="border-top: 2.5px solid #0f172a;">
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px;">TOTAL:</td>
+                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                 </table>
             </div>
         </div>
-
     </div>`;
 };
 
@@ -428,6 +581,7 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
     const [selectedInvoices, setSelectedInvoices] = useState(route.facturas || []);
     const [assignedRepartidor, setAssignedRepartidor] = useState(route.repartidorId || '');
     const [isDispatching, setIsDispatching] = useState(false);
+    const [forceNoAfip, setForceNoAfip] = useState(false);
 
     const availableInvoices = useMemo(() => {
         return allPendingInvoices.filter(inv => {
@@ -449,12 +603,15 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
         return { totalMoney, totalStops: selectedInvoices.length };
     }, [selectedInvoices]);
 
-    const handleConfirmDispatch = async () => {
+    const handleConfirmDispatch = async (duplicarTicket = true) => {
         if (!assignedRepartidor) return toast.error("Debes asignar un repartidor.");
         if (selectedInvoices.length === 0) return toast.error("La ruta está vacía.");
         setIsDispatching(true);
         try {
-            await onDispatch(route.id, assignedRepartidor, selectedInvoices, routeSummary);
+            const facturasAEnviar = forceNoAfip
+                ? selectedInvoices.map(inv => ({ ...inv, facturaAfip: false }))
+                : selectedInvoices;
+            await onDispatch(route.id, assignedRepartidor, facturasAEnviar, routeSummary, duplicarTicket);
             onClose();
         } catch (error) {
             toast.error("Error al despachar: " + error.message);
@@ -507,7 +664,11 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                             <p className="text-[10px] text-gray-500 truncate">{inv.clienteDireccion}</p>
                                             {inv.tipo === 'devolucion' && <span className="mt-1 inline-block text-[9px] font-bold bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-md border border-orange-100">DEVOLUCIÓN</span>}
                                             {/* INDICADOR VISUAL SI REQUIERE AFIP */}
-                                            {inv.facturaAfip && <span className="ml-1 inline-block text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-100">AFIP</span>}
+                                            {inv.facturaAfip && (
+                                                forceNoAfip
+                                                    ? <span className="ml-1 inline-block text-[9px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md border border-gray-200 line-through">AFIP</span>
+                                                    : <span className="ml-1 inline-block text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-100">AFIP</span>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-gray-700 text-xs">{formatCurrency(inv.totalVenta)}</span>
@@ -525,6 +686,17 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                 <option value="">-- Seleccionar Chofer --</option>
                                 {repartidores.map(r => <option key={r.id} value={r.id}>{r.nombreCompleto}</option>)}
                             </select>
+                            {!isReadOnly && (
+                                <button
+                                    type="button"
+                                    onClick={() => setForceNoAfip(v => !v)}
+                                    title="Al despachar, ninguna factura de esta ruta se emitirá como ARCA/AFIP (se ignora la condición del cliente)"
+                                    className={`mt-2 w-full flex items-center justify-center gap-2 text-xs font-bold py-2 rounded-xl border-2 transition-all ${forceNoAfip ? 'bg-red-50 border-red-500 text-red-600' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                                >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${forceNoAfip ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                                    {forceNoAfip ? 'NINGUNA FACTURA SERÁ ARCA' : 'Forzar sin ARCA (todas Consumidor Final)'}
+                                </button>
+                            )}
                         </div>
                         <div className="flex-grow overflow-y-auto p-3 space-y-2 bg-gray-50/30 custom-scrollbar">
                             {selectedInvoices.map((inv, index) => (
@@ -560,9 +732,14 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
                                         <div className="text-xs text-gray-500">Total <span className="block text-lg font-bold text-indigo-600">{formatCurrency(routeSummary.totalMoney)}</span></div>
                                     </div>
                                 </div>
-                                <button onClick={handleConfirmDispatch} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
-                                    {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
-                                </button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleConfirmDispatch(true)} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} title="Imprime cada ticket duplicado (original + copia) para cortar" className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
+                                        {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><TruckIcon className="w-5 h-5"/> {isEditMode ? 'GUARDAR CAMBIOS' : 'CONFIRMAR Y DESPACHAR'}</>}
+                                    </button>
+                                    <button onClick={() => handleConfirmDispatch(false)} disabled={isDispatching || !assignedRepartidor || selectedInvoices.length === 0} title="Imprime 2 facturas distintas por hoja, sin repetir" className="flex-1 bg-white border-2 border-indigo-600 hover:bg-indigo-50 disabled:bg-gray-100 disabled:border-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed text-indigo-600 font-bold py-3.5 rounded-xl transition-all flex justify-center items-center gap-2 active:scale-[0.99]">
+                                        {isDispatching ? <span className="animate-pulse">Contactando AFIP...</span> : <><PrinterIcon className="w-5 h-5"/> Facturas Únicas</>}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -580,15 +757,36 @@ function Rutas() {
     const [mapRoute, setMapRoute] = useState(null);
     const [activeTab, setActiveTab] = useState('planificacion');
     const [plannerReadOnly, setPlannerReadOnly] = useState(false);
+    const [closingRoute, setClosingRoute] = useState(null);
     const { tenantId, getTenantCollection, getTenantDoc, addTenantDoc, updateTenantDoc, deleteTenantDoc, db, onTenantSnapshot } = useFirestore();
     const { companyConfig: config } = useTenant();
+    const { activeShift } = useShift();
 
     const { data: routes, isLoading: routesLoading } = useFirestoreSubscription('rutas', [{ field: 'fechaCreacion', direction: 'desc' }]);
     const { data: allInvoices, isLoading: invoicesLoading } = useFirestoreSubscription('ventas');
     const { data: allVendors, isLoading: vendorsLoading } = useFirestoreSubscription('vendedores');
     const { data: clientes, isLoading: clientesLoading } = useFirestoreSubscription('clientes');
     const { data: zonas, isLoading: zonasLoading } = useFirestoreSubscription('zonas');
-    
+    const { data: productos } = useFirestoreSubscription('productos');
+    const { data: categorias } = useFirestoreSubscription('categorias');
+
+    // Lookup productoId/nombre -> nombre de categoría, para agrupar el Reporte de Carga.
+    // Se indexa también por nombre normalizado porque algunas ventas viejas guardan
+    // items sin productId (o con un id de producto ya borrado/recreado).
+    const productCategoryLookup = useMemo(() => {
+        const byId = new Map();
+        const byName = new Map();
+        productos.forEach(p => {
+            const catNombre = categorias.find(c => c.id === p.categoriaId)?.nombre || 'Sin Categoría';
+            byId.set(p.id, catNombre);
+            byName.set(normalizeKey(p.nombre), catNombre);
+        });
+        return { byId, byName };
+    }, [productos, categorias]);
+
+    // Mapa zonaId -> nombre, para agrupar la Hoja de Ruta por zona
+    const zonaMap = useMemo(() => new Map(zonas.map(z => [z.id, z.nombre])), [zonas]);
+
     // --- AQUÍ FUSIONAMOS LA INTELIGENCIA DEL CLIENTE CON LA FACTURA ---
     const enrichedInvoices = useMemo(() => {
         return allInvoices.map(invoice => {
@@ -617,15 +815,21 @@ function Rutas() {
     const repartidoresOnly = useMemo(() => {
         const filtered = allVendors.filter(v => {
             const roleStr = (v.rango || v.role || v.rol || '').toLowerCase().trim();
-            // Aceptamos 'reparto', 'repartidor', 'vendedor' (para mayor compatibilidad) o 'administrador'
-            return roleStr.includes('reparto') || roleStr.includes('vendedor') || roleStr === 'administrador';
+            return roleStr.includes('reparto');
         });
 
         if (allVendors.length > 0 && filtered.length === 0) {
-            console.warn("⚠️ Filtro de repartidores: Se encontraron usuarios, pero ninguno coincide con 'reparto', 'vendedor' o 'administrador'.", allVendors);
+            console.warn("⚠️ Filtro de repartidores: Se encontraron usuarios, pero ninguno tiene rol 'reparto'/'repartidor'.", allVendors);
         }
 
         return filtered;
+    }, [allVendors]);
+
+    const vendedoresOnly = useMemo(() => {
+        return allVendors.filter(v => {
+            const roleStr = (v.rango || v.role || v.rol || '').toLowerCase().trim();
+            return roleStr.includes('vendedor') && !roleStr.includes('reparto');
+        });
     }, [allVendors]);
 
     const handleCreateNewRoute = async () => {
@@ -648,7 +852,7 @@ function Rutas() {
     };
 
     // --- LÓGICA DE DESPACHO INTELIGENTE (AFIP + PDF) ---
-    const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen) => {
+    const handleDispatchRoute = async (routeId, repartidorId, facturas, resumen, duplicarTicket = true) => {
         const repartidor = allVendors.find(r => r.id === repartidorId);
         
         // --- BLINDAJE FISCAL: PRE-VUELO ---
@@ -769,11 +973,11 @@ function Rutas() {
         let allPrintContent = '';
         
         // A. Reporte de Carga (Interno)
-        const loadingReportHtml = generateLoadingReportHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto);
+        const loadingReportHtml = generateLoadingReportHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto, productCategoryLookup, zonaMap);
         allPrintContent += `<div style="padding: 20px;">${loadingReportHtml}</div><div style="page-break-after: always;"></div>`;
         
         // B. Listado de Ruta (Clientes a visitar y Cobranzas)
-        const routeListHtml = generateRouteListHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto);
+        const routeListHtml = generateRouteListHTML(facturasParaImprimir, selectedRoute?.nombre, repartidor?.nombreCompleto, zonaMap);
         allPrintContent += `<div style="padding: 20px;">${routeListHtml}</div><div style="page-break-after: always;"></div>`;
         
         // C. Facturas Individuales (Cliente)
@@ -784,15 +988,52 @@ function Rutas() {
         });
         
         const invoicesHtmls = await Promise.all(printPromises);
-        invoicesHtmls.forEach(html => {
-            allPrintContent += `<div style="padding: 20px;">${html}</div><div style="page-break-after: always;"></div>`;
+        invoicesHtmls.forEach((html, i) => {
+            const fac = facturasParaImprimir[i];
+            if (fac.afipCAE) {
+                allPrintContent += `<div style="padding: 10px;">${html}</div><div style="page-break-after: always;"></div>`;
+            } else if (duplicarTicket) {
+                // Modo "duplicado": la MISMA factura 2 veces por hoja (original + copia para cortar)
+                allPrintContent += `
+                    <div class="invoice-copy" style="padding: 6px;">${html}</div>
+                    <div class="cut-line">✂ &nbsp;─────────────────────────── CORTAR ───────────────────────────&nbsp; ✂</div>
+                    <div class="invoice-copy" style="padding: 6px;">${html}</div>
+                    <div style="page-break-after: always;"></div>`;
+            } else {
+                // Modo "Facturas Únicas": 2 facturas DISTINTAS por hoja, sin repetir ninguna.
+                // Cada factura ocupa media hoja A4 (min-height: 135mm) para que se vea prolijo
+                // aunque tenga un solo ítem; si una factura es más larga que media hoja,
+                // "page-break-inside: avoid" la empuja completa a la siguiente mitad disponible
+                // en vez de partirla al medio.
+                const esUltima = i === invoicesHtmls.length - 1;
+                allPrintContent += `<div class="invoice-copy invoice-half" style="padding: 6px;">${html}</div>`;
+                if (!esUltima) {
+                    allPrintContent += `<div class="cut-line">✂ &nbsp;─────────────────────────── CORTAR ───────────────────────────&nbsp; ✂</div>`;
+                }
+            }
         });
-        
+
         printHTML(`<html><head><style>
-            body { font-family: 'Arial Narrow', Arial, sans-serif; margin: 0; }
-            @media print { body { margin: 0; } }
+            * { box-sizing: border-box; }
+            @page { size: A4; margin: 10mm; }
+            body { font-family: Arial, Helvetica, sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             thead { display: table-header-group; }
             tr { page-break-inside: avoid; }
+            .invoice-footer { display: flex; border-top: 2px solid #1e293b; background: #fff; }
+            .invoice-copy { page-break-inside: avoid; }
+            /* 135mm en vez de 50vh: "vh" en impresión se calcula sobre el viewport de la
+               ventana emergente (no sobre la hoja A4 real), así que el tamaño quedaba
+               inconsistente entre navegadores/impresoras. A4 (297mm) menos margen 10mm
+               arriba/abajo = 277mm útiles; 135mm por mitad deja lugar a la línea de corte
+               y sigue siendo físicamente correcto sin importar el dispositivo de impresión. */
+            .invoice-half { min-height: 135mm; box-sizing: border-box; }
+            .cut-line { border-top: 1px dashed #94a3b8; text-align: center; font-size: 9px; color: #94a3b8; padding: 4px 0; letter-spacing: 1px; page-break-after: avoid; page-break-before: avoid; margin: 2px 0; }
+            img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; filter: none !important; opacity: 1 !important; }
+            @media print {
+                body { margin: 0; padding: 0; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; filter: none !important; opacity: 1 !important; }
+            }
         </style></head><body>${allPrintContent}</body></html>`);
     };
 
@@ -822,6 +1063,111 @@ function Rutas() {
     const handleViewRoute = (route) => { setSelectedRoute(route); setPlannerReadOnly(true); setIsPlannerOpen(true); };
     const handleEditInProgress = (route) => { setSelectedRoute(route); setPlannerReadOnly(false); setIsPlannerOpen(true); };
     const handleOpenMap = (route) => { setMapRoute(route); setIsMapOpen(true); };
+
+    // --- REIMPRESIÓN DE UNA RUTA YA DESPACHADA (Reporte de Carga + Hoja de Ruta) ---
+    const handlePrintRoute = (route) => {
+        const routeInvoiceIds = (route.facturas || []).map(f => f.id);
+        const invoicesForPrint = enrichedInvoices.filter(inv => routeInvoiceIds.includes(inv.id));
+        if (invoicesForPrint.length === 0) return toast.warn("Esta ruta no tiene facturas para imprimir.");
+
+        const repartidorNombre = route.repartidorNombre || 'N/A';
+        const loadingReportHtml = generateLoadingReportHTML(invoicesForPrint, route.nombre, repartidorNombre, productCategoryLookup, zonaMap);
+        const routeListHtml = generateRouteListHTML(invoicesForPrint, route.nombre, repartidorNombre, zonaMap);
+        const content = `<div style="padding: 20px;">${loadingReportHtml}</div><div style="page-break-after: always;"></div><div style="padding: 20px;">${routeListHtml}</div>`;
+
+        printHTML(`<html><head><style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+        </style></head><body>${content}</body></html>`);
+    };
+
+    // --- CIERRE MANUAL DE RUTA (carga en oficina desde la hoja de papel del repartidor) ---
+    const handleFinalizeManualRoute = async (route, resultados) => {
+        const facturasRuta = route.facturas || [];
+        const batch = writeBatch(db);
+        let quedaAlgunaDeuda = false;
+
+        const nuevasFacturasRuta = facturasRuta.map(entry => {
+            const r = resultados[entry.id] || { resultado: 'no_entregada' };
+            const inv = enrichedInvoices.find(e => e.id === entry.id);
+
+            if (r.resultado === 'no_entregada' || !inv) {
+                const ventaRef = getTenantDoc('ventas', entry.id);
+                batch.update(ventaRef, { estado: 'Pendiente de Entrega', rutaId: null });
+                return { ...entry, estadoVisita: 'No Entregada', observacion: r.observacion || '' };
+            }
+
+            const saldoActual = inv.saldoPendiente ?? inv.totalVenta ?? 0;
+            const pagos = r.pagos || [];
+            const totalPagosCrudo = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+            // Si el total pagado supera el saldo (error de tipeo), lo prorrateamos para no dejar saldoPendiente negativo
+            const factorAjuste = totalPagosCrudo > saldoActual && totalPagosCrudo > 0 ? saldoActual / totalPagosCrudo : 1;
+            const nuevoSaldo = Math.max(0, saldoActual - Math.min(totalPagosCrudo, saldoActual));
+            const nuevoEstado = nuevoSaldo <= 0.05 ? 'Pagada' : 'Adeuda';
+            if (nuevoSaldo > 0.05) quedaAlgunaDeuda = true;
+
+            const ventaRef = getTenantDoc('ventas', entry.id);
+            const updateData = {
+                estado: nuevoEstado,
+                saldoPendiente: nuevoSaldo,
+                rutaId: null,
+                lastPayment: serverTimestamp()
+            };
+
+            pagos.forEach(p => {
+                const montoCrudo = parseFloat(p.monto) || 0;
+                if (montoCrudo <= 0) return;
+                const monto = montoCrudo * factorAjuste;
+
+                if (p.metodo === 'Efectivo') updateData.pagoEfectivo = increment(monto);
+                else if (p.metodo === 'Transferencia') updateData.pagoTransferencia = increment(monto);
+                else if (p.metodo === 'QR') updateData.pagoQR = increment(monto);
+                else if (p.metodo === 'Point') updateData.pagoPoint = increment(monto);
+
+                const cobranzaRef = doc(getTenantCollection('cobranzas'));
+                batch.set(cobranzaRef, {
+                    companyId: tenantId,
+                    ventaId: entry.id,
+                    clienteId: inv.clienteId,
+                    clienteNombre: inv.clienteNombre,
+                    monto,
+                    metodoPago: p.metodo,
+                    fecha: serverTimestamp(),
+                    shiftId: activeShift?.id || null,
+                    detalle: `Cobranza en ruta ${route.nombre} (carga manual desde hoja de papel)`
+                });
+
+                if (p.metodo === 'Efectivo') {
+                    const cajaRef = doc(getTenantCollection('movimientos_caja'));
+                    batch.set(cajaRef, {
+                        companyId: tenantId,
+                        monto,
+                        tipo: 'ingreso',
+                        categoria: 'cobranza_cliente',
+                        detalle: `Cobranza ruta: ${inv.clienteNombre} (${route.nombre})`,
+                        fecha: serverTimestamp(),
+                        shiftId: activeShift?.id || null
+                    });
+                }
+            });
+
+            batch.update(ventaRef, updateData);
+
+            return { ...entry, estadoVisita: nuevoEstado === 'Pagada' ? 'Pagada' : 'Adeuda', observacion: r.observacion || '' };
+        });
+
+        const routeRef = getTenantDoc('rutas', route.id);
+        batch.update(routeRef, {
+            facturas: nuevasFacturasRuta,
+            estado: quedaAlgunaDeuda ? 'Adeuda' : 'Completada',
+            fechaCierre: serverTimestamp(),
+            cierreManual: true
+        });
+
+        await batch.commit();
+    };
 
     if (routesLoading || invoicesLoading || vendorsLoading || clientesLoading || zonasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
@@ -866,7 +1212,7 @@ function Rutas() {
                 {activeTab === 'en_curso' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {enCurso.map(route => (
-                            <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} onEdit={() => handleEditInProgress(route)} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} readOnly={false} onOpenMap={() => handleOpenMap(route)} />
+                            <RouteCard key={route.id} route={route} onOpenPlanner={() => handleViewRoute(route)} onEdit={() => handleEditInProgress(route)} onCancel={() => handleCancelRoute(route)} allInvoices={enrichedInvoices} readOnly={false} onOpenMap={() => handleOpenMap(route)} onPrint={() => handlePrintRoute(route)} onManualClose={() => setClosingRoute(route)} />
                         ))}
                         {enCurso.length === 0 && <EmptyState message="No hay camiones en la calle ahora mismo." />}
                     </div>
@@ -885,17 +1231,29 @@ function Rutas() {
             {isPlannerOpen && selectedRoute && (
                 <PlannerView 
                     route={selectedRoute} onClose={() => { setIsPlannerOpen(false); setSelectedRoute(null); }} 
-                    allPendingInvoices={pendingInvoices} repartidores={repartidoresOnly} zonas={zonas} vendors={allVendors}
+                    allPendingInvoices={pendingInvoices} repartidores={repartidoresOnly} zonas={zonas} vendors={vendedoresOnly}
                     onDispatch={handleDispatchRoute} isReadOnly={plannerReadOnly}
                 />
             )}
 
             {isMapOpen && mapRoute && (
-                <RouteMapMonitor 
-                    isOpen={isMapOpen} 
-                    onClose={() => { setIsMapOpen(false); setMapRoute(null); }} 
-                    route={mapRoute} 
+                <RouteMapMonitor
+                    isOpen={isMapOpen}
+                    onClose={() => { setIsMapOpen(false); setMapRoute(null); }}
+                    route={mapRoute}
                     clientes={clientes}
+                />
+            )}
+
+            {closingRoute && (
+                <CierreManualModal
+                    route={closingRoute}
+                    invoices={enrichedInvoices.filter(inv => (closingRoute.facturas || []).some(f => f.id === inv.id))}
+                    onClose={() => setClosingRoute(null)}
+                    onConfirm={async (resultados) => {
+                        await handleFinalizeManualRoute(closingRoute, resultados);
+                        setClosingRoute(null);
+                    }}
                 />
             )}
         </div>
@@ -919,7 +1277,7 @@ const EmptyState = ({ message }) => (
     </div>
 );
 
-const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCancel, onOpenMap }) => {
+const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCancel, onOpenMap, onPrint, onManualClose }) => {
     const { MapPin } = { MapPin: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> };
     const { estado, nombre, repartidorNombre, facturas } = route;
     const liveStats = useMemo(() => {
@@ -957,6 +1315,7 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                 {estado === 'En Curso' && (
                     <div className="flex gap-2">
                         <button onClick={onOpenMap} title="Auditoría GPS" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-orange-50 text-gray-400 hover:text-orange-600 transition-colors"><MapPin className="w-4 h-4"/></button>
+                        <button onClick={onPrint} title="Imprimir Hoja de Ruta / Reporte de Carga" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors"><PrinterIcon className="w-4 h-4"/></button>
                         <button onClick={onEdit} title="Editar Ruta" className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"><EditIcon className="w-4 h-4"/></button>
                     </div>
                 )}
@@ -977,17 +1336,179 @@ const RouteCard = ({ route, onOpenPlanner, allInvoices, readOnly, onEdit, onCanc
                 </div>
             )}
             {estado === 'En Curso' && !readOnly && (
-                <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-dashed border-gray-100">
-                    <button onClick={onOpenPlanner} title="Monitorizar" className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 hover:scale-110 transition-all shadow-sm border border-blue-100"><EyeIcon className="w-5 h-5"/></button>
-                    <button onClick={onEdit} title="Editar Ruta" className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm border border-yellow-100"><EditIcon className="w-5 h-5"/></button>
-                    <button onClick={onCancel} title="Anular y Eliminar" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100"><TrashIcon className="w-5 h-5"/></button>
-                </div>
+                <>
+                    <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-dashed border-gray-100">
+                        <button onClick={onOpenPlanner} title="Monitorizar" className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 hover:scale-110 transition-all shadow-sm border border-blue-100"><EyeIcon className="w-5 h-5"/></button>
+                        <button onClick={onPrint} title="Imprimir Hoja de Ruta / Reporte de Carga" className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 hover:scale-110 transition-all shadow-sm border border-emerald-100"><PrinterIcon className="w-5 h-5"/></button>
+                        <button onClick={onEdit} title="Editar Ruta" className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm border border-yellow-100"><EditIcon className="w-5 h-5"/></button>
+                        <button onClick={onCancel} title="Anular y Eliminar" className="w-10 h-10 rounded-full bg-white text-gray-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all border border-gray-100"><TrashIcon className="w-5 h-5"/></button>
+                    </div>
+                    <button onClick={onManualClose} title="Cargar hoja de papel del repartidor y finalizar la ruta" className="mt-3 w-full py-3 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 shadow-md">
+                        <ClipboardCheckIcon className="w-4 h-4"/> FINALIZAR RUTA (CARGA MANUAL)
+                    </button>
+                </>
             )}
             {estado === 'Planificada' && !readOnly && (
                 <button onClick={onOpenPlanner} className="mt-6 w-full py-3 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-md">
                     GESTIONAR <ArrowRightIcon className="w-3 h-3"/>
                 </button>
             )}
+        </div>
+    );
+};
+
+// --- CIERRE MANUAL DE RUTA (carga en oficina desde la hoja de papel del repartidor) ---
+// Métodos de pago alineados 1:1 con lo que ya reconcilian generateSettlementReportHTML/TabContentRendicion y Caja.jsx
+const METODOS_PAGO = [
+    { value: 'Efectivo', label: '💵 Efectivo' },
+    { value: 'Transferencia', label: '🏦 Transferencia' },
+    { value: 'QR', label: '📱 QR (Mercado Pago)' },
+    { value: 'Point', label: '💳 Point Smart' },
+];
+
+const CierreManualModal = ({ route, invoices, onClose, onConfirm }) => {
+    const [resultados, setResultados] = useState(() => {
+        const initial = {};
+        invoices.forEach(inv => {
+            initial[inv.id] = {
+                resultado: 'entregada',
+                pagos: [{ metodo: 'Efectivo', monto: inv.saldoPendiente ?? inv.totalVenta ?? 0 }],
+                observacion: ''
+            };
+        });
+        return initial;
+    });
+    const [isSaving, setIsSaving] = useState(false);
+
+    const updateRow = (id, patch) => setResultados(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+    const updatePago = (id, idx, patch) => setResultados(prev => {
+        const pagos = prev[id].pagos.map((p, i) => i === idx ? { ...p, ...patch } : p);
+        return { ...prev, [id]: { ...prev[id], pagos } };
+    });
+    const addPago = (id) => setResultados(prev => {
+        const otroMetodo = METODOS_PAGO.find(m => m.value !== prev[id].pagos[0].metodo)?.value || 'Transferencia';
+        return { ...prev, [id]: { ...prev[id], pagos: [...prev[id].pagos, { metodo: otroMetodo, monto: 0 }] } };
+    });
+    const removePago = (id, idx) => setResultados(prev => ({ ...prev, [id]: { ...prev[id], pagos: prev[id].pagos.filter((_, i) => i !== idx) } }));
+
+    const montoTotalPagos = (pagos) => pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+
+    const summary = useMemo(() => {
+        let totalPrevisto = 0, totalCobrado = 0, totalEfectivo = 0, totalTransferencia = 0, totalQR = 0, totalPoint = 0, noEntregadas = 0, quedanDeuda = 0;
+        invoices.forEach(inv => {
+            const r = resultados[inv.id];
+            const saldo = inv.saldoPendiente ?? inv.totalVenta ?? 0;
+            totalPrevisto += saldo;
+            if (!r || r.resultado === 'no_entregada') { noEntregadas++; return; }
+            const totalPagado = Math.min(montoTotalPagos(r.pagos), saldo);
+            totalCobrado += totalPagado;
+            r.pagos.forEach(p => {
+                const monto = parseFloat(p.monto) || 0;
+                if (p.metodo === 'Efectivo') totalEfectivo += monto;
+                else if (p.metodo === 'Transferencia') totalTransferencia += monto;
+                else if (p.metodo === 'QR') totalQR += monto;
+                else if (p.metodo === 'Point') totalPoint += monto;
+            });
+            if (saldo - totalPagado > 0.05) quedanDeuda++;
+        });
+        return { totalPrevisto, totalCobrado, totalEfectivo, totalTransferencia, totalQR, totalPoint, noEntregadas, quedanDeuda };
+    }, [invoices, resultados]);
+
+    const handleConfirmClick = async () => {
+        if (!window.confirm(`¿Confirmar el cierre de "${route.nombre}"?\n\nSe registrarán los cobros, se actualizará la deuda de cada cliente y la ruta pasará a Rendición.`)) return;
+        setIsSaving(true);
+        try {
+            await onConfirm(resultados);
+            toast.success("Ruta finalizada y cobros registrados correctamente.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al finalizar la ruta: " + error.message);
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center animate-fade-in p-4">
+            <div className="bg-white w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><ClipboardCheckIcon className="text-indigo-600"/> Cierre Manual de Ruta</h2>
+                        <p className="text-xs text-gray-500 font-medium mt-1">{route.nombre} · Cargá acá el resultado de la hoja de papel del repartidor</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"><XIcon className="w-6 h-6" /></button>
+                </div>
+                <div className="flex-grow overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+                    {invoices.map(inv => {
+                        const r = resultados[inv.id] || {};
+                        const saldo = inv.saldoPendiente ?? inv.totalVenta ?? 0;
+                        const esEntregada = r.resultado !== 'no_entregada';
+                        const totalPagado = Math.min(montoTotalPagos(r.pagos || []), saldo);
+                        return (
+                            <div key={inv.id} className={`bg-white border rounded-xl p-4 ${esEntregada ? 'border-gray-100' : 'border-red-200 bg-red-50/30'}`}>
+                                <div className="flex justify-between items-start gap-4 flex-wrap">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-gray-800 text-sm">{inv.clienteNombre}</p>
+                                        <p className="text-xs text-gray-500">{inv.clienteDireccion}</p>
+                                        <p className="text-xs text-gray-400 mt-1">Total factura: {formatCurrency(inv.totalVenta)} &nbsp;·&nbsp; Saldo actual: <strong className="text-gray-600">{formatCurrency(saldo)}</strong></p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => updateRow(inv.id, { resultado: 'entregada' })} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${esEntregada ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>ENTREGADA</button>
+                                        <button onClick={() => updateRow(inv.id, { resultado: 'no_entregada' })} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${!esEntregada ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300'}`}>NO ENTREGADA</button>
+                                    </div>
+                                </div>
+                                {esEntregada && (
+                                    <div className="mt-3 space-y-2">
+                                        {(r.pagos || []).map((p, idx) => (
+                                            <div key={idx} className="flex gap-3 flex-wrap items-end">
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">{idx === 0 ? 'Monto Cobrado' : 'Monto (2º método)'}</label>
+                                                    <input type="number" value={p.monto} onChange={e => updatePago(inv.id, idx, { monto: e.target.value })} className="w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Método</label>
+                                                    <select value={p.metodo} onChange={e => updatePago(inv.id, idx, { metodo: e.target.value })} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                                        {METODOS_PAGO.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                                    </select>
+                                                </div>
+                                                {idx > 0 && (
+                                                    <button onClick={() => removePago(inv.id, idx)} className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"><XIcon className="w-4 h-4"/></button>
+                                                )}
+                                                {idx === (r.pagos.length - 1) && r.pagos.length < 2 && (
+                                                    <button onClick={() => addPago(inv.id)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-lg transition-colors">+ Pago combinado (2º método)</button>
+                                                )}
+                                                {idx === (r.pagos.length - 1) && totalPagado < saldo - 0.05 && (
+                                                    <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-2 py-1 rounded-lg">Queda a cuenta corriente: {formatCurrency(saldo - totalPagado)}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mt-3">
+                                    <input type="text" placeholder="Observación (opcional)" value={r.observacion || ''} onChange={e => updateRow(inv.id, { observacion: e.target.value })} className="w-full px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {invoices.length === 0 && <p className="text-center text-gray-400 py-10">Esta ruta no tiene facturas.</p>}
+                </div>
+                <div className="bg-white border-t border-gray-100 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4 text-center">
+                        <div className="bg-gray-50 rounded-xl p-2"><p className="text-[9px] font-bold text-gray-400 uppercase">Previsto</p><p className="text-sm font-bold text-gray-800">{formatCurrency(summary.totalPrevisto)}</p></div>
+                        <div className="bg-emerald-50 rounded-xl p-2"><p className="text-[9px] font-bold text-emerald-500 uppercase">Cobrado</p><p className="text-sm font-bold text-emerald-700">{formatCurrency(summary.totalCobrado)}</p></div>
+                        <div className="bg-blue-50 rounded-xl p-2"><p className="text-[9px] font-bold text-blue-500 uppercase">Efectivo</p><p className="text-sm font-bold text-blue-700">{formatCurrency(summary.totalEfectivo)}</p></div>
+                        <div className="bg-indigo-50 rounded-xl p-2"><p className="text-[9px] font-bold text-indigo-500 uppercase">Transferencia</p><p className="text-sm font-bold text-indigo-700">{formatCurrency(summary.totalTransferencia)}</p></div>
+                        <div className="bg-purple-50 rounded-xl p-2"><p className="text-[9px] font-bold text-purple-500 uppercase">QR</p><p className="text-sm font-bold text-purple-700">{formatCurrency(summary.totalQR)}</p></div>
+                        <div className="bg-cyan-50 rounded-xl p-2"><p className="text-[9px] font-bold text-cyan-500 uppercase">Point</p><p className="text-sm font-bold text-cyan-700">{formatCurrency(summary.totalPoint)}</p></div>
+                        <div className="bg-orange-50 rounded-xl p-2"><p className="text-[9px] font-bold text-orange-500 uppercase">A Deuda / No Entreg.</p><p className="text-sm font-bold text-orange-700">{summary.quedanDeuda + summary.noEntregadas}</p></div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={onClose} className="flex-1 bg-white border-2 border-gray-200 hover:bg-gray-50 text-gray-600 font-bold py-3 rounded-xl transition-all">CANCELAR</button>
+                        <button onClick={handleConfirmClick} disabled={isSaving} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2">
+                            {isSaving ? <span className="animate-pulse">Finalizando...</span> : <><ClipboardCheckIcon className="w-5 h-5"/> FINALIZAR RUTA Y CERRAR CAJA</>}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

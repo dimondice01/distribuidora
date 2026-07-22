@@ -168,6 +168,10 @@ function Products() {
 
   const handleQuickImageUpload = async (file, productId) => {
     if (isProcessingQuick) return;
+    if (!navigator.onLine) {
+      toast.warning("Sin conexión. La subida de imágenes requiere internet.");
+      return;
+    }
     setIsProcessingQuick(true);
     const tId = toast.loading("Optimizando y subiendo imagen...");
     try {
@@ -283,19 +287,25 @@ function Products() {
         let imageThumbUrl = formData.imgThumb || '';
 
         if (imageFile) {
-            toast.info("Optimizando imágenes...");
-            // Generar Standard (800px) y Thumb (300px)
-            const [stdBlob, thumbBlob] = await Promise.all([
-                optimizeProductImage(imageFile, 800),
-                optimizeProductImage(imageFile, 300)
-            ]);
-
-            const timestamp = Date.now();
-            const sRef = ref(storage, `productos/${tenantId}/std_${timestamp}.webp`);
-            const tRef = ref(storage, `productos/${tenantId}/thumb_${timestamp}.webp`);
-
-            await Promise.all([uploadBytes(sRef, stdBlob), uploadBytes(tRef, thumbBlob)]);
-            [imageUrl, imageThumbUrl] = await Promise.all([getDownloadURL(sRef), getDownloadURL(tRef)]);
+            if (!navigator.onLine) {
+                toast.warning("Sin conexión: la imagen nueva no se subirá ahora, pero los datos del producto se guardarán.");
+            } else {
+                try {
+                    toast.info("Optimizando imágenes...");
+                    const [stdBlob, thumbBlob] = await Promise.all([
+                        optimizeProductImage(imageFile, 800),
+                        optimizeProductImage(imageFile, 300)
+                    ]);
+                    const timestamp = Date.now();
+                    const sRef = ref(storage, `productos/${tenantId}/std_${timestamp}.webp`);
+                    const tRef = ref(storage, `productos/${tenantId}/thumb_${timestamp}.webp`);
+                    await Promise.all([uploadBytes(sRef, stdBlob), uploadBytes(tRef, thumbBlob)]);
+                    [imageUrl, imageThumbUrl] = await Promise.all([getDownloadURL(sRef), getDownloadURL(tRef)]);
+                } catch (storageError) {
+                    console.error("Error al subir imagen:", storageError);
+                    toast.warning("No se pudo subir la imagen (error de red). Los datos del producto se guardarán de todas formas.");
+                }
+            }
         }
 
         let finalStock = Number(formData.stock) || 0;
@@ -380,19 +390,30 @@ function Products() {
   };
 
   const handleScan = async (e) => {
-    if (e.key === 'Enter') { 
-      e.preventDefault(); 
-      const code = scanInput.trim(); 
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const code = scanInput.trim();
       if (!code || !tenantId) return;
-      
-      const q = query(
-        getTenantCollection("productos"), 
-        where("codigoDeBarras", "==", code), 
-        limit(1)
-      ); 
-      const s = await getDocs(q);
-      if (!s.empty) openModalForEdit({ id: s.docs[0].id, ...s.docs[0].data() }); 
-      else { openModalForAdd(); setFormData(prev => ({ ...prev, codigoDeBarras: code })); }
+
+      // Busca primero en el estado local (funciona offline y es más rápido)
+      const localProduct = products.find(p => p.codigoDeBarras === code);
+      if (localProduct) {
+        openModalForEdit(localProduct);
+        setIsScanning(false); setScanInput('');
+        return;
+      }
+
+      // Fallback: query a Firestore (por si el producto no estaba en el snapshot previo)
+      try {
+        const q = query(getTenantCollection("productos"), where("codigoDeBarras", "==", code), limit(1));
+        const s = await getDocs(q);
+        if (!s.empty) openModalForEdit({ id: s.docs[0].id, ...s.docs[0].data() });
+        else { openModalForAdd(); setFormData(prev => ({ ...prev, codigoDeBarras: code })); }
+      } catch (err) {
+        console.error("Error al escanear:", err);
+        openModalForAdd();
+        setFormData(prev => ({ ...prev, codigoDeBarras: code }));
+      }
       setIsScanning(false); setScanInput('');
     }
   };

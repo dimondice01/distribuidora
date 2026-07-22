@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, addDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app';
 import { db } from '../firebase';
 import { useFirestore } from '../hooks/useFirestore';
 import { 
@@ -91,6 +92,7 @@ const IntegrationsPageMP = () => {
     const [terminals, setTerminals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
+    const [searchingCajas, setSearchingCajas] = useState(false);
     const [configuring, setConfiguring] = useState(null); 
     const [showToken, setShowToken] = useState(false);
     const [tutorialOpen, setTutorialOpen] = useState(false);
@@ -207,11 +209,11 @@ const IntegrationsPageMP = () => {
         setSearching(true);
         setTerminals([]);
         try {
-            const functions = getFunctions();
+            const functions = getFunctions(getApp(), 'southamerica-west1');
             // Llamamos a la función que migramos hoy
             const obtenerTerminales = httpsCallable(functions, 'obtenerTerminales');
-            
-            const result = await obtenerTerminales();
+
+            const result = await obtenerTerminales({ companyId: tenantId });
             const devices = result.data.devices || [];
             
             if (devices.length === 0) {
@@ -227,13 +229,43 @@ const IntegrationsPageMP = () => {
         }
     };
 
+    const handleSearchCajas = async () => {
+        if (unsavedChanges) return alert("⚠️ Guarda los cambios (Token) antes de buscar.");
+        if (!config.accessToken) return alert("⚠️ Ingresa un Access Token primero.");
+
+        setSearchingCajas(true);
+        try {
+            const functions = getFunctions(getApp(), 'southamerica-west1');
+            const obtenerCajasQR = httpsCallable(functions, 'obtenerCajasQR');
+
+            const result = await obtenerCajasQR({ companyId: tenantId });
+            const cajas = result.data.cajas || [];
+
+            if (cajas.length === 0) {
+                alert("⚠️ No se encontraron cajas (puntos de venta) asociadas a esta cuenta.");
+            } else {
+                setCajasQR(prev => {
+                    const merged = [...prev];
+                    cajas.forEach(c => { if (!merged.some(m => m.id === c.id)) merged.push(c); });
+                    return merged;
+                });
+                setUnsavedChanges(true);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error buscando cajas: " + (e.message || "Revisa el Token"));
+        } finally {
+            setSearchingCajas(false);
+        }
+    };
+
     const handleConfigurePoint = async (deviceId, mode) => {
         setConfiguring(deviceId);
         try {
-            const functions = getFunctions();
+            const functions = getFunctions(getApp(), 'southamerica-west1');
             const configurarPoint = httpsCallable(functions, 'configurarPoint');
-            
-            await configurarPoint({ deviceId, mode });
+
+            await configurarPoint({ companyId: tenantId, deviceId, mode });
             
             alert(`✅ Terminal configurada en modo: ${mode === 'PDV' ? 'INTEGRADO (PDV)' : 'STANDALONE'}.\n\nReinicia el Point para ver los cambios.`);
         } catch (e) {
@@ -387,9 +419,19 @@ const IntegrationsPageMP = () => {
 
                         {/* 3. GESTIÓN DE CAJAS VIRTUALES (QR) */}
                         <section className="bg-white rounded-xl p-6 border border-slate-200">
-                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
-                                <Store size={20} className="text-slate-400"/> Cajas Virtuales (QR)
-                            </h3>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <Store size={20} className="text-slate-400"/> Cajas Virtuales (QR)
+                                </h3>
+                                <button
+                                    onClick={handleSearchCajas}
+                                    disabled={searchingCajas || !config.accessToken || unsavedChanges}
+                                    className="text-[#009EE3] border border-[#009EE3] px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                                >
+                                    {searchingCajas ? <Loader2 className="animate-spin" size={14}/> : <Search size={14}/>}
+                                    Buscar Mis Cajas
+                                </button>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
                                 <input type="text" placeholder="ID de la Caja (External ID)" value={newCaja.id} onChange={e => setNewCaja({...newCaja, id: e.target.value})} className="px-4 py-2 bg-slate-50 border rounded-lg text-sm" />
                                 <input type="text" placeholder="Nombre (Ej: Reparto 1)" value={newCaja.nombre} onChange={e => setNewCaja({...newCaja, nombre: e.target.value})} className="px-4 py-2 bg-slate-50 border rounded-lg text-sm" />
