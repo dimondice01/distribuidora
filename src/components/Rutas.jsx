@@ -30,6 +30,21 @@ const ClipboardCheckIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2
 // --- UTILIDADES ---
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
+// Mide la altura real (en mm) que ocupará el HTML de una factura al imprimirse,
+// renderizándola oculta con el mismo ancho/fuente que usa la hoja A4 (190mm útiles
+// con margen 10mm). Así se puede decidir si entra en media hoja o necesita una
+// hoja A4 completa, sin adivinar por cantidad de ítems.
+const PX_POR_MM = 96 / 25.4;
+const medirAlturaFacturaMM = (html) => {
+    const contenedor = document.createElement('div');
+    contenedor.style.cssText = 'position:absolute; left:-9999px; top:0; width:718px;';
+    contenedor.innerHTML = `<style>*{box-sizing:border-box;} .invoice-footer{display:flex;border-top:2px solid #1e293b;background:#fff;}</style><div style="padding:6px; font-family: Arial, Helvetica, sans-serif;">${html}</div>`;
+    document.body.appendChild(contenedor);
+    const alturaPx = contenedor.scrollHeight;
+    document.body.removeChild(contenedor);
+    return alturaPx / PX_POR_MM;
+};
+
 // Formatea la fecha de AFIP YYYYMMDD a DD/MM/YYYY
 const formatAfipDate = (dateStr) => {
     if (!dateStr || dateStr.length !== 8) return dateStr;
@@ -111,23 +126,23 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre, produc
     <style>
         @page { size: A4; margin: 8mm 6mm; }
         * { box-sizing: border-box; }
-        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 14px;}
+        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 28px;}
         h1, h2 {color: #0f172a; margin: 0; line-height: 1.2;}
         table{width: 100%; border-collapse: collapse; table-layout: fixed;}
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
         th, .cell { border: 1px solid #cbd5e1; }
-        .cell { padding: 3px 7px; font-size: 14px; line-height: 1.35; font-weight: 700; text-transform: uppercase; }
+        .cell { padding: 3px 7px; font-size: 28px; line-height: 1.35; font-weight: 700; text-transform: uppercase; }
         .cell-center { text-align: center; }
         .cell-strong { font-weight: 900; }
         .cat-cell {
             background: none; color: #0f172a; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 0.5px; font-size: 15px; padding: 7px 5px 4px 0;
+            letter-spacing: 0.5px; font-size: 30px; padding: 7px 5px 4px 0;
             border: none; border-bottom: 1.5px solid #0f172a;
         }
         thead th{
             background: none; color: #0f172a; border: none; border-bottom: 1.5px solid #0f172a;
-            padding: 6px 7px; text-align: left; font-size: 12px;
+            padding: 6px 7px; text-align: left; font-size: 24px;
             text-transform: uppercase; letter-spacing: 0.4px; font-weight: 900;
         }
     </style>
@@ -164,8 +179,8 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre, produc
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total General (por las dudas):</td>
-                    <td style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 11px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalGeneral)}</td>
+                    <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 18px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total General (por las dudas):</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 22px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalGeneral)}</td>
                 </tr>
             </tfoot>
         </table>
@@ -214,27 +229,27 @@ const generateRouteListHTML = (invoices, routeName, repartidorNombre, zonaMap = 
     <style>
         @page { size: A4; margin: 8mm 6mm; }
         * { box-sizing: border-box; }
-        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 10px;}
+        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 20px;}
         h1, h2 {color: #0f172a; margin: 0; line-height: 1.2;}
         table{width: 100%; border-collapse: collapse; table-layout: fixed;}
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
         th, .cell { border: 1px solid #cbd5e1; }
-        .cell { padding: 2px 6px; font-size: 10px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell { padding: 2px 6px; font-size: 20px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cell-center { text-align: center; }
         .cell-right { text-align: right; }
         .cell-strong { font-weight: 700; }
         .cell-muted { color: #64748b; }
         .cell-firma { width: 55px; }
-        .tag-dev { font-size: 7.5px; font-weight: 700; color: #c2410c; background: #ffedd5; border: 1px solid #fed7aa; border-radius: 3px; padding: 0 3px; }
+        .tag-dev { font-size: 15px; font-weight: 700; color: #c2410c; background: #ffedd5; border: 1px solid #fed7aa; border-radius: 3px; padding: 0 3px; }
         .zone-cell {
             background: #e2e8f0; color: #0f172a; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 0.4px; font-size: 9.5px; padding: 3px 6px; border: 1px solid #cbd5e1;
+            letter-spacing: 0.4px; font-size: 19px; padding: 3px 6px; border: 1px solid #cbd5e1;
         }
         thead th{
-            background-color: #0f172a; color: #fff; border: 1px solid #0f172a;
-            padding: 4px 6px; text-align: left; font-size: 8.5px;
-            text-transform: uppercase; letter-spacing: 0.4px;
+            background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1;
+            border-bottom: 2px solid #0f172a; padding: 4px 6px; text-align: left; font-size: 17px;
+            text-transform: uppercase; letter-spacing: 0.4px; font-weight: 900;
         }
         tfoot td { border: 1px solid #cbd5e1; padding: 5px; }
     </style>
@@ -274,8 +289,8 @@ const generateRouteListHTML = (invoices, routeName, repartidorNombre, zonaMap = 
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3" style="text-align: right; font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total Esperado en Ruta:</td>
-                    <td colspan="2" style="text-align: right; font-size: 12px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalRuta)}</td>
+                    <td colspan="3" style="text-align: right; font-size: 20px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total Esperado en Ruta:</td>
+                    <td colspan="2" style="text-align: right; font-size: 24px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalRuta)}</td>
                 </tr>
             </tfoot>
         </table>
@@ -358,11 +373,11 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
         const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
         return `
         <tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
-            <td style="padding: 6px 8px; font-size: 12px; font-weight: 700; color: #0f172a;">${item.nombre}</td>
-            <td style="padding: 6px 5px; text-align: center; font-size: 11px; font-weight: 600; width: 30px; color: #374151;">u.</td>
-            <td style="padding: 6px 5px; text-align: center; font-size: 12px; font-weight: 700; width: 40px; color: #0f172a;">${item.quantity}</td>
-            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 600; width: 90px; color: #0f172a;">${formatCurrency(precioUnit)}</td>
-            <td style="padding: 6px 8px; text-align: right; font-size: 12px; font-weight: 800; width: 90px; color: #0f172a;">${formatCurrency(subtotal)}</td>
+            <td style="padding: 6px 8px; font-size: 14.5px; font-weight: 700; color: #0f172a;">${item.nombre}</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 13px; font-weight: 600; width: 30px; color: #374151;">u.</td>
+            <td style="padding: 6px 5px; text-align: center; font-size: 14.5px; font-weight: 700; width: 40px; color: #0f172a;">${item.quantity}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 14.5px; font-weight: 600; width: 90px; color: #0f172a;">${formatCurrency(precioUnit)}</td>
+            <td style="padding: 6px 8px; text-align: right; font-size: 14.5px; font-weight: 800; width: 90px; color: #0f172a;">${formatCurrency(subtotal)}</td>
         </tr>`;
     }).join('');
 
@@ -385,112 +400,114 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
     `;
 
     return `
-    <div class="invoice-wrap" style="max-width: 760px; margin: auto; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative;">
-
-        <div style="text-align: right; padding: 4px 10px 0; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #374151;">ORIGINAL</div>
-
-        <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #cbd5e1;">
-            <tr>
-                <td style="width: 46%; vertical-align: top; padding: 8px 10px 10px 10px;">
-                    <div style="margin: 0 0 6px 0;">
-                        ${config?.logo
-                            ? `<img src="${config.logo}" alt="Logo" style="max-height: 100px; max-width: 252px; display: block; object-fit: contain; object-position: left top; opacity: 1; filter: none; -webkit-print-color-adjust: exact;">`
-                            : `<div style="font-size: 24px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config?.nombreFantasia || config?.name || ''}</div>`
-                        }
-                    </div>
-                    <p style="margin: 0; font-size: 11px; line-height: 1.6; color: #0f172a;">
-                        <strong style="color:#0f172a;">${config?.razonSocial || config?.nombreFantasia || config?.name || ''}</strong><br>
-                        <span style="color:#374151;">Domicilio:</span> ${config?.domicilioFiscal || ''}<br>
-                        <span style="color:#374151;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
-                    </p>
-                </td>
-                <td style="width: 68px; vertical-align: top; padding: 0; position: relative;">
-                    <div style="background: #1e293b; width: 100%; min-height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px 0;">
-                        <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
-                        <div style="font-size: 9px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
-                    </div>
-                    <div style="position: absolute; left: 50%; top: 68px; bottom: 0; width: 1px; background: #cbd5e1; transform: translateX(-50%);"></div>
-                </td>
-                <td style="width: 46%; vertical-align: top; padding: 8px 12px 10px 14px;">
-                    <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
-                    <p style="margin: 0; font-size: 11px; line-height: 1.7; color: #0f172a;">
-                        <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
-                        <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
-                        <span style="color:#374151;">CUIT:</span> ${formatCuit(config?.cuit)}
-                        ${config?.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
-                        ${config?.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
-                    </p>
-                </td>
-            </tr>
-        </table>
-
-        <div style="border-bottom: 1px solid #cbd5e1; padding: 6px 10px; background: #f8fafc; line-height: 1.5;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
-                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cliente</div>
-                        <strong style="text-transform: uppercase; font-size: 12px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
-                    </td>
-                    <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">CUIT / DNI</div>
-                        <strong style="font-size: 12px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento)}</strong>
-                    </td>
-                    <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
-                        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cond. Venta</div>
-                        <strong style="font-size: 12px; color: #0f172a;">${condicionVenta}</strong>
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding-top: 3px; vertical-align: top;">
-                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Domicilio:</span>
-                        <span style="font-size: 11px; color: #0f172a;"> ${clientDetails.direccion || 'N/A'}</span>
-                        &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
-                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Cond. IVA:</span>
-                        <span style="font-size: 11px; color: #0f172a;"> ${condIvaTexto}</span>
-                    </td>
-                </tr>
-            </table>
-        </div>
+    <div class="invoice-wrap" style="width: 100%; height: 100%; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; position: relative; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
 
         <div>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="border-bottom: 2.5px solid #0f172a; border-top: 1px solid #cbd5e1;">
-                        <th style="padding: 7px 8px; text-align: left; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
-                        <th style="padding: 7px 5px; text-align: center; width: 30px; color: #64748b; font-weight: 700; font-size: 11px; text-transform: uppercase;">U.M.</th>
-                        <th style="padding: 7px 5px; text-align: center; width: 40px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Cant.</th>
-                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
-                        <th style="padding: 7px 8px; text-align: right; width: 90px; color: #0f172a; font-weight: 900; font-size: 11px; text-transform: uppercase;">Importe</th>
-                    </tr>
-                </thead>
-                <tbody>${itemsHtml}</tbody>
+            <div style="text-align: right; padding: 3px 8px 0; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #374151;">ORIGINAL</div>
+
+            <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #cbd5e1;">
+                <tr>
+                    <td style="width: 46%; vertical-align: top; padding: 6px 8px 8px 8px;">
+                        <div style="margin: 0 0 4px 0;">
+                            ${config?.logo
+                                ? `<img src="${config.logo}" alt="Logo" style="max-height: 80px; max-width: 220px; display: block; object-fit: contain; object-position: left top; opacity: 1; filter: none; -webkit-print-color-adjust: exact;">`
+                                : `<div style="font-size: 22px; font-weight: 900; color: #0f172a; line-height: 1; letter-spacing: -0.5px;">${config?.nombreFantasia || config?.name || ''}</div>`
+                            }
+                        </div>
+                        <p style="margin: 0; font-size: 10px; line-height: 1.5; color: #0f172a;">
+                            <strong style="color:#0f172a;">${config?.razonSocial || config?.nombreFantasia || config?.name || ''}</strong><br>
+                            <span style="color:#374151;">Domicilio:</span> ${config?.domicilioFiscal || ''}<br>
+                            <span style="color:#374151;">Condición IVA:</span> ${isRI ? 'Responsable Inscripto' : 'Monotributo'}
+                        </p>
+                    </td>
+                    <td style="width: 68px; vertical-align: top; padding: 0; position: relative;">
+                        <div style="background: #ffffff; border: 2px solid #0f172a; width: 52px; height: 52px; margin: 4px auto; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 4px;">
+                            <div style="font-size: 26px; font-weight: 900; line-height: 1; color: #0f172a;">${letra}</div>
+                            <div style="font-size: 8px; font-weight: 800; margin-top: 1px; color: #475569; letter-spacing: 0.5px;">${codComprobante}</div>
+                        </div>
+                        <div style="position: absolute; left: 50%; top: 60px; bottom: 0; width: 1px; background: #cbd5e1; transform: translateX(-50%);"></div>
+                    </td>
+                    <td style="width: 46%; vertical-align: top; padding: 6px 10px 8px 12px;">
+                        <h2 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
+                        <p style="margin: 0; font-size: 10px; line-height: 1.6; color: #0f172a;">
+                            <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
+                            <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                            <span style="color:#374151;">CUIT:</span> ${formatCuit(config?.cuit)}
+                            ${config?.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
+                            ${config?.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                        </p>
+                    </td>
+                </tr>
             </table>
+
+            <div style="border-bottom: 1px solid #cbd5e1; padding: 5px 8px; background: #f8fafc; line-height: 1.4;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="width: 55%; padding-bottom: 2px; vertical-align: top;">
+                            <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cliente</div>
+                            <strong style="text-transform: uppercase; font-size: 11px; color: #0f172a;">${venta.clienteNombre || clientDetails.nombre || 'CONSUMIDOR FINAL'}</strong>
+                        </td>
+                        <td style="width: 25%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                            <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">CUIT / DNI</div>
+                            <strong style="font-size: 11px; color: #0f172a;">${formatCuit(venta.clienteCuit || clientDetails.numeroDocumento)}</strong>
+                        </td>
+                        <td style="width: 20%; padding-bottom: 2px; text-align: right; vertical-align: top;">
+                            <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 1px;">Cond. Venta</div>
+                            <strong style="font-size: 11px; color: #0f172a;">${condicionVenta}</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="3" style="padding-top: 2px; vertical-align: top;">
+                            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Domicilio:</span>
+                            <span style="font-size: 10px; color: #0f172a;"> ${clientDetails.direccion || 'N/A'}</span>
+                            &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
+                            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Cond. IVA:</span>
+                            <span style="font-size: 10px; color: #0f172a;"> ${condIvaTexto}</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #0f172a; border-top: 1px solid #cbd5e1;">
+                            <th style="padding: 5px 6px; text-align: left; color: #0f172a; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Descripción</th>
+                            <th style="padding: 5px 4px; text-align: center; width: 30px; color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase;">U.M.</th>
+                            <th style="padding: 5px 4px; text-align: center; width: 40px; color: #0f172a; font-weight: 900; font-size: 12px; text-transform: uppercase;">Cant.</th>
+                            <th style="padding: 5px 6px; text-align: right; width: 85px; color: #0f172a; font-weight: 900; font-size: 12px; text-transform: uppercase;">P. Unit.${esFacturaA ? ' (Neto)' : ''}</th>
+                            <th style="padding: 5px 6px; text-align: right; width: 85px; color: #0f172a; font-weight: 900; font-size: 12px; text-transform: uppercase;">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemsHtml}</tbody>
+                </table>
+            </div>
         </div>
 
         <div class="invoice-footer">
-            <div style="width: 60%; padding: 12px;">
+            <div style="width: 60%; padding: 8px;">
                 ${bloquePie}
             </div>
             <div style="width: 40%; border-left: 1px solid #cbd5e1;">
-                <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
                     ${esFacturaA ? `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Neto Gravado (21%):</td>
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta / 1.21)}</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #374151; font-size: 10px; font-weight: 700;">Neto Gravado (21%):</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #0f172a; font-size: 11px; font-weight: 700;">${formatCurrency(venta.totalVenta / 1.21)}</td>
                     </tr>
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">IVA (21%):</td>
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #374151; font-size: 10px; font-weight: 700;">IVA (21%):</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #0f172a; font-size: 11px; font-weight: 700;">${formatCurrency(venta.totalVenta - (venta.totalVenta / 1.21))}</td>
                     </tr>
                     ` : `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #374151; font-size: 11px; font-weight: 700;">Subtotal:</td>
-                        <td style="padding: 6px 12px 6px 8px; text-align: right; color: #0f172a; font-size: 12px; font-weight: 700;">${formatCurrency(venta.totalVenta)}</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #374151; font-size: 10px; font-weight: 700;">Subtotal:</td>
+                        <td style="padding: 4px 8px 4px 6px; text-align: right; color: #0f172a; font-size: 11px; font-weight: 700;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                     `}
-                    <tr style="border-top: 2.5px solid #0f172a;">
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px;">TOTAL:</td>
-                        <td style="padding: 10px 12px 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a;">${formatCurrency(venta.totalVenta)}</td>
+                    <tr style="border-top: 2px solid #0f172a;">
+                        <td style="padding: 6px 8px 6px 6px; text-align: right; font-size: 12px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px;">TOTAL:</td>
+                        <td style="padding: 6px 8px 6px 6px; text-align: right; font-size: 12px; font-weight: 900; color: #0f172a;">${formatCurrency(venta.totalVenta)}</td>
                     </tr>
                 </table>
             </div>
@@ -988,6 +1005,12 @@ function Rutas() {
         });
         
         const invoicesHtmls = await Promise.all(printPromises);
+
+        // Facturas del modo "Facturas Únicas" (sin CAE, sin duplicado) que necesitan
+        // el algoritmo de casillero de media hoja / hoja completa. Se juntan acá y se
+        // procesan después del forEach, agrupadas por tamaño para minimizar desperdicio de papel.
+        const candidatasCasillero = [];
+
         invoicesHtmls.forEach((html, i) => {
             const fac = facturasParaImprimir[i];
             if (fac.afipCAE) {
@@ -1000,18 +1023,40 @@ function Rutas() {
                     <div class="invoice-copy" style="padding: 6px;">${html}</div>
                     <div style="page-break-after: always;"></div>`;
             } else {
-                // Modo "Facturas Únicas": 2 facturas DISTINTAS por hoja, sin repetir ninguna.
-                // Cada factura ocupa media hoja A4 (min-height: 135mm) para que se vea prolijo
-                // aunque tenga un solo ítem; si una factura es más larga que media hoja,
-                // "page-break-inside: avoid" la empuja completa a la siguiente mitad disponible
-                // en vez de partirla al medio.
-                const esUltima = i === invoicesHtmls.length - 1;
-                allPrintContent += `<div class="invoice-copy invoice-half" style="padding: 6px;">${html}</div>`;
-                if (!esUltima) {
-                    allPrintContent += `<div class="cut-line">✂ &nbsp;─────────────────────────── CORTAR ───────────────────────────&nbsp; ✂</div>`;
-                }
+                candidatasCasillero.push(html);
             }
         });
+
+        // Modo "Facturas Únicas": se clasifica cada factura por su altura real (medida
+        // renderizándola oculta) en "media" (entra en 135mm) o "completa" (necesita el
+        // A4 entero). Las completas NUNCA comparten hoja ni se cortan a la mitad —
+        // van solas en su propia hoja. Para que eso no deje huecos en blanco cada vez
+        // que una completa interrumpe a una media esperando pareja, se reordena: primero
+        // todas las medias emparejadas de a 2 por hoja, y al final todas las completas.
+        // Esto acota el desperdicio a, como mucho, una sola media hoja en blanco en
+        // total (solo si la cantidad de medias es impar), a costa de no respetar el
+        // orden original de la ruta entre facturas medias y completas.
+        if (candidatasCasillero.length > 0) {
+            const medias = [];
+            const completas = [];
+            candidatasCasillero.forEach(html => {
+                if (medirAlturaFacturaMM(html) > 135) completas.push(html);
+                else medias.push(html);
+            });
+
+            for (let i = 0; i < medias.length; i += 2) {
+                allPrintContent += `<div class="invoice-copy invoice-half" style="padding: 6px;">${medias[i]}</div>`;
+                if (medias[i + 1]) {
+                    allPrintContent += `<div class="cut-line">✂ &nbsp;─────────────────────────── CORTAR ───────────────────────────&nbsp; ✂</div>`;
+                    allPrintContent += `<div class="invoice-copy invoice-half" style="padding: 6px;">${medias[i + 1]}</div>`;
+                }
+                allPrintContent += `<div style="page-break-after: always;"></div>`;
+            }
+
+            completas.forEach(html => {
+                allPrintContent += `<div style="padding: 10px;">${html}</div><div style="page-break-after: always;"></div>`;
+            });
+        }
 
         printHTML(`<html><head><style>
             * { box-sizing: border-box; }

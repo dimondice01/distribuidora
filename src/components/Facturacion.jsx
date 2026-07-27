@@ -194,9 +194,9 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                     </p>
                 </td>
                 <td style="width: 68px; vertical-align: top; padding: 0; position: relative;">
-                    <div style="background: #1e293b; width: 100%; min-height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px 0;">
-                        <div style="font-size: 36px; font-weight: 900; line-height: 1; color: #fff;">${letra}</div>
-                        <div style="font-size: 9px; margin-top: 3px; color: #94a3b8; letter-spacing: 0.5px;">${codComprobante}</div>
+                    <div style="background: #ffffff; border: 2px solid #0f172a; width: 56px; height: 56px; margin: 6px auto; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 4px;">
+                        <div style="font-size: 28px; font-weight: 900; line-height: 1; color: #0f172a;">${letra}</div>
+                        <div style="font-size: 8px; font-weight: 800; margin-top: 1px; color: #475569; letter-spacing: 0.5px;">${codComprobante}</div>
                     </div>
                     <div style="position: absolute; left: 50%; top: 68px; bottom: 0; width: 1px; background: #cbd5e1; transform: translateX(-50%);"></div>
                 </td>
