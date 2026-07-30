@@ -165,7 +165,10 @@ function ReporteVendedor() {
                 };
             }
             
-            const esCobranza = mov.tipox === 'cobranza' || mov.tipo === 'cobranza';
+            // Blindaje: además de 'cobranza'/'cobro', cualquier doc que traiga 'ventaOriginalId'
+            // es un cobro legacy que quedó guardado como venta (antes de separar la colección
+            // cobranzas) — nunca debe sumar a totalVenta/comisión de un vendedor.
+            const esCobranza = mov.tipox === 'cobranza' || mov.tipo === 'cobranza' || mov.tipo === 'cobro' || !!mov.ventaOriginalId;
             let comisionCorrecta = 0;
 
             if (esCobranza) {

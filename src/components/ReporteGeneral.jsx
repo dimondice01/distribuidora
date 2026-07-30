@@ -169,8 +169,10 @@ function ReporteGeneral() {
 
                         // Compatibilidad hacia atrás: si quedó algún cobro viejo escrito
                         // dentro de "ventas" (antes de separar la colección cobranzas),
-                        // lo excluimos para que no ensucie el reporte de ganancia.
-                        const esCobroLegacy = data.tipo === 'cobranza' || data.tipo === 'cobro';
+                        // lo excluimos para que no ensucie el reporte de ganancia. El chequeo
+                        // por 'ventaOriginalId' cubre además los legacy que quedaron sin 'tipo'
+                        // seteado: una venta real nunca referencia a otra venta como "original".
+                        const esCobroLegacy = data.tipo === 'cobranza' || data.tipo === 'cobro' || !!data.ventaOriginalId;
 
                         if (!esPendientePuro && !esCobroLegacy) {
                             ventasData.push({

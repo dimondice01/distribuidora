@@ -461,7 +461,11 @@ function Facturacion() {
             }));
             
             const cleanDocs = docs.filter(d => {
-                if (!d.tipo) return true; 
+                // Blindaje extra: cobros legacy que quedaron sin 'tipo' seteado, pero que sí
+                // tienen 'ventaOriginalId' (referencian la venta a la que le pagaron el saldo).
+                // Una venta real nunca tiene ese campo. Ver functions/scripts/migrate-cobranzas.js.
+                if (d.ventaOriginalId) return false;
+                if (!d.tipo) return true;
                 return !['cobro', 'cobranza', 'rendicion', 'rendicion_vendedor', 'rendicion_cobranza'].includes(d.tipo);
             });
 

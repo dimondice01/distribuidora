@@ -50,6 +50,7 @@ function Clientes({ onViewDetail }) {
   const [filteredClientes, setFilteredClientes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterZona, setFilterZona] = useState('');
+  const [filterVendedor, setFilterVendedor] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'nombre', direction: 'asc' });
   
   const [rubros, setRubros] = useState([]);
@@ -60,7 +61,7 @@ function Clientes({ onViewDetail }) {
   // --- ESTADO CLIENTE ---
   const initialClientState = {
     nombre: '', telefono: '', direccion: '', barrio: '', localidad: '', email: '',
-    rubroId: '', zonaId: '', listaPreciosAsignada: '', vendedorAsignadoId: '', 
+    rubroId: '', zonaId: '', listaPreciosAsignada: '',
     isArca: false, requiereFacturaAfip: false, condicionIva: 'CF', tipoDocumento: 'SC', numeroDocumento: '', dni: '',
     lat: '', lng: '' 
   };
@@ -119,6 +120,11 @@ function Clientes({ onViewDetail }) {
       results = results.filter(c => c.zonaId === filterZona);
     }
 
+    if (filterVendedor) {
+      const vendedorSeleccionado = vendedores.find(v => v.id === filterVendedor);
+      results = results.filter(c => vendedorSeleccionado?.zonasAsignadas?.includes(c.zonaId));
+    }
+
     if (filterDeuda) {
       results = results.filter(c => (deudaMap[c.id] || 0) > 0);
     }
@@ -147,9 +153,9 @@ function Clientes({ onViewDetail }) {
         if (sortConfig.key === 'zonaId') {
           valA = zonas.find(z => z.id === a.zonaId)?.nombre || '';
           valB = zonas.find(z => z.id === b.zonaId)?.nombre || '';
-        } else if (sortConfig.key === 'vendedorAsignadoId') {
-          valA = vendedores.find(v => v.id === a.vendedorAsignadoId)?.nombreCompleto || '';
-          valB = vendedores.find(v => v.id === b.vendedorAsignadoId)?.nombreCompleto || '';
+        } else if (sortConfig.key === 'vendedoresZona') {
+          valA = vendedores.filter(v => v.zonasAsignadas?.includes(a.zonaId)).map(v => v.nombreCompleto).join(', ');
+          valB = vendedores.filter(v => v.zonasAsignadas?.includes(b.zonaId)).map(v => v.nombreCompleto).join(', ');
         }
 
         if (typeof valA === 'string') valA = valA.toLowerCase();
@@ -163,7 +169,7 @@ function Clientes({ onViewDetail }) {
 
     setFilteredClientes(results);
     setCurrentPage(1);
-  }, [searchTerm, filterZona, filterDeuda, sortConfig, clientes, zonas, vendedores, deudaMap]);
+  }, [searchTerm, filterZona, filterVendedor, filterDeuda, sortConfig, clientes, zonas, vendedores, deudaMap]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -176,7 +182,10 @@ function Clientes({ onViewDetail }) {
   // Helpers de Nombre
   const getRubroNombre = (id) => rubros.find(r => r.id === id)?.nombre || <span className="text-slate-300">-</span>;
   const getZonaNombre = (id) => zonas.find(z => z.id === id)?.nombre || <span className="text-red-400 font-bold text-xs">Sin Zona</span>;
-  const getVendedorNombre = (id) => vendedores.find(v => v.id === id)?.nombreCompleto || <span className="text-slate-300 text-xs italic">Libre</span>;
+  const getVendedoresDeZona = (zonaId) => {
+    const nombres = vendedores.filter(v => v.zonasAsignadas?.includes(zonaId)).map(v => v.nombreCompleto);
+    return nombres.length > 0 ? nombres.join(', ') : <span className="text-slate-300 text-xs italic">Sin vendedores en esta zona</span>;
+  };
 
   // Paginación
   const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
@@ -240,7 +249,7 @@ function Clientes({ onViewDetail }) {
     setEditingCliente({
       ...initialClientState, ...cliente, 
       zonaId: cliente.zonaId || '', listaPreciosAsignada: cliente.listaPreciosAsignada || '',
-      vendedorAsignadoId: cliente.vendedorAsignadoId || '', isArca: cliente.isArca || false,
+      isArca: cliente.isArca || false,
       requiereFacturaAfip: cliente.requiereFacturaAfip ?? cliente.isArca ?? false,
       tipoDocumento: cliente.tipoDocumento || 'SC', numeroDocumento: cliente.numeroDocumento || '',
       lat: cliente.lat || '', lng: cliente.lng || ''
@@ -320,14 +329,11 @@ function Clientes({ onViewDetail }) {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-indigo-800 mb-1.5">Vendedor Asignado</label>
-                        <select 
-                            name="vendedorAsignadoId" value={data.vendedorAsignadoId} onChange={handleChange} 
-                            className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl text-indigo-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer"
-                        >
-                            <option value="">-- Libre (Todos) --</option>
-                            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}
-                        </select>
+                        <label className="block text-xs font-bold text-indigo-800 mb-1.5">Vendedores de esta Zona</label>
+                        <div className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl text-indigo-900 text-sm font-medium shadow-sm min-h-[42px] flex items-center">
+                            {data.zonaId ? getVendedoresDeZona(data.zonaId) : <span className="text-slate-300 italic">Elegí una zona para ver los vendedores</span>}
+                        </div>
+                        <p className="text-[11px] text-indigo-400 mt-1">Se calcula automáticamente: todo vendedor con esta zona asignada ve este cliente en su cartera.</p>
                     </div>
                 </div>
             </div>
@@ -550,6 +556,20 @@ function Clientes({ onViewDetail }) {
             </div>
         </div>
 
+        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-52 flex items-center relative">
+            <select
+               value={filterVendedor}
+               onChange={(e) => setFilterVendedor(e.target.value)}
+               className="w-full bg-transparent border-none text-slate-700 font-medium focus:ring-0 outline-none text-sm cursor-pointer py-3 pl-4 pr-10 appearance-none"
+            >
+               <option value="">Todos los Vendedores</option>
+               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}
+            </select>
+            <div className="absolute right-4 pointer-events-none text-slate-400">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </div>
+        </div>
+
         <button
           onClick={() => setFilterDeuda(f => !f)}
           className={`px-5 py-3 rounded-2xl shadow-sm border font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${filterDeuda ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-600'}`}
@@ -594,11 +614,11 @@ function Clientes({ onViewDetail }) {
                 </th>
                 <th 
                   className="px-6 py-5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 cursor-pointer hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                  onClick={() => handleSort('vendedorAsignadoId')}
+                  onClick={() => handleSort('vendedoresZona')}
                 >
                   <div className="flex items-center gap-2">
-                    Vendedor
-                    {sortConfig.key === 'vendedorAsignadoId' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                    Vendedores de Zona
+                    {sortConfig.key === 'vendedoresZona' && <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                   </div>
                 </th>
                 <th 
@@ -670,8 +690,8 @@ function Clientes({ onViewDetail }) {
                     </td>
 
                     <td className={`px-6 py-5 ${rowBg} transition-colors border-b border-slate-200`}>
-                        <span className={`text-xs font-medium ${cliente.vendedorAsignadoId ? 'text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100' : 'text-slate-400 italic'}`}>
-                            {getVendedorNombre(cliente.vendedorAsignadoId)}
+                        <span className="text-xs font-medium text-slate-600">
+                            {getVendedoresDeZona(cliente.zonaId)}
                         </span>
                     </td>
 

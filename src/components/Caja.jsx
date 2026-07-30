@@ -136,10 +136,14 @@ function Caja() {
     }, [selectedDate, tenantId]);
 
     const { resumen, currentShiftMovimientos, currentShiftGastos } = useMemo(() => {
-        // Combinamos ventas y cobranzas para el flujo de ingresos
+        // Combinamos ventas y cobranzas para el flujo de ingresos. Excluimos cobros legacy
+        // que quedaron guardados como venta (antes de separar la colección cobranzas), para
+        // no mostrarlos como "Venta Mostrador" ni contarlos dos veces si se migran después.
         const allIngresos = [
-            ...ventasPorFecha.map(v => ({ ...v, tipoIngreso: 'venta' })),
-            ...cobranzasDia.map(c => ({ 
+            ...ventasPorFecha
+                .filter(v => v.tipo !== 'cobranza' && v.tipo !== 'cobro' && !v.ventaOriginalId)
+                .map(v => ({ ...v, tipoIngreso: 'venta' })),
+            ...cobranzasDia.map(c => ({
                 ...c, 
                 tipoIngreso: 'cobranza', 
                 // Adaptamos campos para consistencia en el resumen

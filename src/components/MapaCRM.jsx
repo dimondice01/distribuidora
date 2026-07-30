@@ -206,9 +206,8 @@ export default function MapaCRM({ onViewClient }) {
         const visitados = new Set(eventosFiltrados.map(e => e.clienteId).filter(Boolean));
         return clientes
             .filter(c => c.zonaId === filtros.zonaId)
-            .filter(c => !filtros.vendedorId || c.vendedorAsignadoId === filtros.vendedorId)
             .filter(c => !visitados.has(c.id));
-    }, [clientes, filtros.zonaId, filtros.vendedorId, eventosFiltrados]);
+    }, [clientes, filtros.zonaId, eventosFiltrados]);
 
     const clientesSinVisitarConCoords = useMemo(() =>
         clientesSinVisitar.filter(c => c.location?.latitude && c.location?.longitude),
@@ -282,7 +281,7 @@ export default function MapaCRM({ onViewClient }) {
                         <select value={filtros.vendedorId} onChange={e => setFiltro('vendedorId', e.target.value)}
                             className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:border-amber-400 focus:outline-none font-medium text-slate-700 h-9">
                             <option value="">Todos</option>
-                            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}
+                            {vendedores.filter(v => v.rango === 'Vendedor').map(v => <option key={v.id} value={v.id}>{v.nombreCompleto}</option>)}
                         </select>
                     </div>
 

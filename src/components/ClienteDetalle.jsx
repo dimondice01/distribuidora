@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase.js';
-import { doc, getDoc, Timestamp, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, query, where, Timestamp, writeBatch, serverTimestamp } from 'firebase/firestore';
 import Button from './Button'; 
 import { useFirestore } from '../hooks/useFirestore';
 import { useTenant } from '../contexts/TenantContext'; // ✅ NUEVO: Contexto Multi-Tenant
@@ -284,7 +284,7 @@ function ClienteDetalle({ clienteId, onBack }) {
     const [ventas, setVentas] = useState([]);
     const [assets, setAssets] = useState([]); 
     const [rubro, setRubro] = useState(null);
-    const [vendedorNombre, setVendedorNombre] = useState('Buscando...');
+    const [vendedoresZonaNombre, setVendedoresZonaNombre] = useState('Buscando...');
     const [loading, setLoading] = useState(true);
 
     // --- ESTADOS DE PAGINACIÓN Y COBRANZA ---
@@ -317,16 +317,13 @@ function ClienteDetalle({ clienteId, onBack }) {
                         }
                     }
 
-                    if (clienteData.vendedorAsignadoId) {
-                        const vRef = doc(db, 'companies', tenantId, 'vendedores', clienteData.vendedorAsignadoId);
-                        const vSnap = await getDoc(vRef);
-                        if (vSnap.exists()) {
-                            setVendedorNombre(vSnap.data().nombreCompleto);
-                        } else {
-                            setVendedorNombre('No encontrado');
-                        }
+                    if (clienteData.zonaId) {
+                        const qVendedores = query(getTenantCollection('vendedores'), where('zonasAsignadas', 'array-contains', clienteData.zonaId));
+                        const vSnap = await getDocs(qVendedores);
+                        const nombres = vSnap.docs.map(d => d.data().nombreCompleto).filter(Boolean);
+                        setVendedoresZonaNombre(nombres.length > 0 ? nombres.join(', ') : 'Sin vendedores en esta zona');
                     } else {
-                        setVendedorNombre('No Asignado');
+                        setVendedoresZonaNombre('Sin Zona');
                     }
                 }
             } catch (e) {
@@ -508,7 +505,7 @@ function ClienteDetalle({ clienteId, onBack }) {
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gestión Venta</p>
                             <div className="flex items-center gap-1.5 text-slate-700 font-bold text-sm">
                                 <UserIcon className="w-3 h-3 text-slate-400"/>
-                                <span className="truncate">{vendedorNombre}</span>
+                                <span className="truncate">{vendedoresZonaNombre}</span>
                             </div>
                             <p className="text-[10px] text-indigo-500 font-bold uppercase mt-0.5">{cliente.listaPreciosAsignada || 'Lista General'}</p>
                         </div>

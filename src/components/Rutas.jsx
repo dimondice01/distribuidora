@@ -105,46 +105,57 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre, produc
     const totalGeneral = Array.from(productSummary.values()).reduce((acc, p) => acc + (p.subtotal || 0), 0);
 
     const itemsRows = categoryNames.map(catNombre => {
-        const catHeaderRow = `<tr><td class="cell cat-cell" colspan="4">${catNombre}</td></tr>`;
+        const catHeaderRow = `<div class="cat-row">${catNombre}</div>`;
         const productos = groups.get(catNombre).sort((a, b) => a.nombre.localeCompare(b.nombre));
         const rows = productos.map(item => {
             const precioUnit = item.quantity ? item.subtotal / item.quantity : 0;
             return `
-            <tr>
-                <td class="cell">${item.nombre}</td>
-                <td class="cell cell-center cell-strong">${item.quantity}</td>
-                <td class="cell cell-right">${formatCurrency(precioUnit)}</td>
-                <td class="cell cell-right cell-strong">${formatCurrency(item.subtotal)}</td>
-            </tr>`;
+            <div class="grid-row">
+                <div class="c">${item.nombre}</div>
+                <div class="c right strong">${item.quantity}</div>
+                <div class="c right">${formatCurrency(precioUnit)}</div>
+                <div class="c right strong">${formatCurrency(item.subtotal)}</div>
+            </div>`;
         }).join('');
         return catHeaderRow + rows;
     }).join('');
 
+    // Nota técnica: este reporte usaba una <table> real, pero Chrome tiene un bug conocido
+    // al exportar tablas a PDF (calcula mal el ancho/alto de celdas y corta texto con "…",
+    // tanto en columnas numéricas como en nombres largos, sin que medie ninguna regla CSS
+    // de truncado). Por eso se arma con CSS Grid (filas <div>) en vez de <table>/<tr>/<td>:
+    // el motor de impresión de Chrome no tiene ese problema fuera de <table>.
     return `
     <html>
     <head><title>Reporte de Carga - ${routeName}</title>
     <style>
         @page { size: A4; margin: 8mm 6mm; }
         * { box-sizing: border-box; }
-        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 28px;}
+        body{font-family: Calibri, Arial, Helvetica, sans-serif; margin: 0; color: #1e293b; font-size: 14px;}
         h1, h2 {color: #0f172a; margin: 0; line-height: 1.2;}
-        table{width: 100%; border-collapse: collapse; table-layout: fixed;}
-        thead { display: table-header-group; }
-        tr { page-break-inside: avoid; }
-        th, .cell { border: 1px solid #cbd5e1; }
-        .cell { padding: 3px 7px; font-size: 28px; line-height: 1.35; font-weight: 700; text-transform: uppercase; }
-        .cell-center { text-align: center; }
-        .cell-strong { font-weight: 900; }
-        .cat-cell {
-            background: none; color: #0f172a; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 0.5px; font-size: 30px; padding: 7px 5px 4px 0;
-            border: none; border-bottom: 1.5px solid #0f172a;
+        .grid-wrap { border-left: 1px solid #cbd5e1; border-top: 1px solid #cbd5e1; }
+        .grid-row { display: grid; grid-template-columns: 1fr 45px 110px 130px; page-break-inside: avoid; }
+        .grid-row.grid-head { border-top: none; }
+        .c {
+            border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;
+            padding: 3px 7px; font-size: 14px; line-height: 1.35; font-weight: 900;
+            text-transform: uppercase; overflow-wrap: anywhere; word-break: break-word;
         }
-        thead th{
-            background: none; color: #0f172a; border: none; border-bottom: 1.5px solid #0f172a;
-            padding: 6px 7px; text-align: left; font-size: 24px;
+        .c.right { text-align: right; }
+        .c.strong { font-weight: 900; }
+        .cat-row {
+            background: none; color: #0f172a; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 0.5px; font-size: 15px; padding: 7px 5px 4px 0;
+            border-bottom: 1.5px solid #0f172a; page-break-inside: avoid;
+        }
+        .grid-head .c {
+            background: none; color: #0f172a; border-top: none; border-bottom: 2.5px solid #0f172a;
+            padding: 6px 7px; text-align: left; font-size: 12px;
             text-transform: uppercase; letter-spacing: 0.4px; font-weight: 900;
         }
+        .grid-head .c.right { text-align: right; }
+        .grid-foot .c { font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: 700; }
+        .grid-foot .c.right { font-size: 18px; font-weight: 900; color: #1e293b; background: #f8fafc; }
     </style>
     </head>
     <body>
@@ -159,31 +170,19 @@ const generateLoadingReportHTML = (invoices, routeName, repartidorNombre, produc
                 Zonas: <strong style="color:#0f172a;">${zonasCubiertas.join(', ')}</strong>
             </div>
         </div>
-        <table>
-            <colgroup>
-                <col />
-                <col style="width: 60px;" />
-                <col style="width: 85px;" />
-                <col style="width: 90px;" />
-            </colgroup>
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th style="text-align: center;">Cant.</th>
-                    <th style="text-align: right;">P. Unit.</th>
-                    <th style="text-align: right;">Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${itemsRows}
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 18px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total General (por las dudas):</td>
-                    <td style="border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; font-size: 22px; font-weight: 900; background: #f8fafc;">${formatCurrency(totalGeneral)}</td>
-                </tr>
-            </tfoot>
-        </table>
+        <div class="grid-wrap">
+            <div class="grid-row grid-head">
+                <div class="c">Producto</div>
+                <div class="c right">Cant.</div>
+                <div class="c right">P. Unit.</div>
+                <div class="c right">Subtotal</div>
+            </div>
+            ${itemsRows}
+            <div class="grid-row grid-foot">
+                <div class="c" style="grid-column: span 3; text-align: right;">Total General:</div>
+                <div class="c right">${formatCurrency(totalGeneral)}</div>
+            </div>
+        </div>
     </body>
     </html>
     `;
@@ -269,10 +268,10 @@ const generateRouteListHTML = (invoices, routeName, repartidorNombre, zonaMap = 
 
         <table>
             <colgroup>
-                <col style="width: 28px;" />
+                <col style="width: 36px;" />
                 <col style="width: 30%;" />
                 <col />
-                <col style="width: 90px;" />
+                <col style="width: 140px;" />
                 <col style="width: 55px;" />
             </colgroup>
             <thead>
@@ -516,7 +515,7 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
 };
 
 // --- REPORTE DE RENDICIÓN (AUTOMÁTICO) ---
-const generateSettlementReportHTML = (route, invoices) => {
+const generateSettlementReportHTML = (route, invoices, routeCobranzas = []) => {
     const resumen = invoices.reduce((acc, fac) => {
         acc.efectivo += fac.pagoEfectivo || 0;
         acc.transferencia += fac.pagoTransferencia || 0;
@@ -526,6 +525,18 @@ const generateSettlementReportHTML = (route, invoices) => {
         acc.totalVenta += fac.totalVenta || 0;
         return acc;
     }, { efectivo: 0, transferencia: 0, qr: 0, point: 0, saldoPendiente: 0, totalVenta: 0 });
+
+    // Cobros de saldos pendientes (deudas de OTRAS ventas/rutas) que el repartidor cobró
+    // durante este recorrido. Van aparte del "TOTAL VENTA RUTA" porque no corresponden a
+    // las facturas de esta ruta, pero sí es plata física que trae el camión.
+    const cobranzasResumen = routeCobranzas.reduce((acc, c) => {
+        if (c.metodoPago === 'Efectivo') acc.efectivo += c.monto || 0;
+        else if (c.metodoPago === 'Transferencia') acc.transferencia += c.monto || 0;
+        else if (c.metodoPago === 'QR') acc.qr += c.monto || 0;
+        else if (c.metodoPago === 'Point') acc.point += c.monto || 0;
+        acc.total += c.monto || 0;
+        return acc;
+    }, { efectivo: 0, transferencia: 0, qr: 0, point: 0, total: 0 });
 
     const devolucionesSummary = new Map();
     invoices.forEach(invoice => {
@@ -554,7 +565,17 @@ const generateSettlementReportHTML = (route, invoices) => {
     const devolucionesRows = Array.from(devolucionesSummary.values()).map(item => `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight:bold;">${item.quantity}</td><td style="padding: 8px; border: 1px solid #ddd;">${item.nombre}</td></tr>`).join('');
     const facturasRows = invoices.map(inv => `<tr><td style="padding: 8px; border: 1px solid #ddd;">${inv.clienteNombre}</td><td style="padding: 8px; border: 1px solid #ddd;">${inv.estado}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.totalVenta)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoEfectivo || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoTransferencia || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoQR || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(inv.pagoPoint || 0)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: red;">${formatCurrency(inv.saldoPendiente)}</td></tr>`).join('');
 
-    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10px;} th, td{padding: 8px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #7f8c8d;} .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; font-weight: bold; }</style></head><body><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div></div><h3>1. DINERO A ENTREGAR (CAJA)</h3><div class="box"><table style="margin:0;"><tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td style="font-size: 14px;">TRANSFERENCIAS:</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.transferencia)}</td></tr><tr><td style="font-size: 14px;">MERCADO PAGO (QR):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.qr)}</td></tr><tr><td style="font-size: 14px;">POINT SMART (Tarjeta):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.point)}</td></tr><tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL VENTA RUTA:</strong></td><td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr></table></div><h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}<h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efvo.</th><th class="amount">Transf.</th><th class="amount">QR</th><th class="amount">Point</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table><div style="margin-top: 60px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div></div></body></html>`;
+    const totalGeneralAEntregar = resumen.efectivo + resumen.transferencia + resumen.qr + resumen.point + cobranzasResumen.total;
+    const cobranzasBoxHtml = cobranzasResumen.total > 0 ? `
+        <tr style="border-top: 2px solid #f39c12; background-color: #fffaf0;"><td colspan="2" style="padding-top: 12px; font-weight: bold; color: #b8860b; font-size: 12px;">+ COBROS DE SALDOS PENDIENTES (ctas. ctes. de otras ventas, cobradas en esta ruta):</td></tr>
+        <tr><td style="font-size: 13px;">Efectivo:</td><td class="amount" style="font-size: 14px;">${formatCurrency(cobranzasResumen.efectivo)}</td></tr>
+        <tr><td style="font-size: 13px;">Transferencia:</td><td class="amount" style="font-size: 14px;">${formatCurrency(cobranzasResumen.transferencia)}</td></tr>
+        <tr><td style="font-size: 13px;">QR:</td><td class="amount" style="font-size: 14px;">${formatCurrency(cobranzasResumen.qr)}</td></tr>
+        <tr><td style="font-size: 13px;">Point:</td><td class="amount" style="font-size: 14px;">${formatCurrency(cobranzasResumen.point)}</td></tr>
+        <tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL GENERAL A ENTREGAR:</strong></td><td class="amount" style="font-size: 22px;"><strong>${formatCurrency(totalGeneralAEntregar)}</strong></td></tr>
+    ` : '';
+
+    return `<html><head><title>Rendición - ${route.nombre}</title><style>body{font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333;} h1, h2, h3 {color: #2c3e50;} table{width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10px;} th, td{padding: 8px; text-align: left; border-bottom: 1px solid #eee;} th{background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #7f8c8d;} .box { border: 2px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #f0f8ff; } .amount { text-align: right; } .danger { color: #e74c3c; } .success { color: #27ae60; font-weight: bold; }</style></head><body><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;"><div><h1 style="margin:0;">Reporte de Rendición</h1><p style="margin:5px 0; color: #7f8c8d;">Ruta: <strong>${route.nombre}</strong> | Repartidor: <strong>${route.repartidorNombre}</strong></p></div><div style="text-align: right;"><p style="font-size: 12px;">Fecha: ${new Date().toLocaleString('es-AR')}</p></div></div><h3>1. DINERO A ENTREGAR (CAJA)</h3><div class="box"><table style="margin:0;"><tr><td style="font-size: 14px;">EFECTIVO (Billetes):</td><td class="amount success" style="font-size: 18px;">${formatCurrency(resumen.efectivo)}</td></tr><tr><td style="font-size: 14px;">TRANSFERENCIAS:</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.transferencia)}</td></tr><tr><td style="font-size: 14px;">MERCADO PAGO (QR):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.qr)}</td></tr><tr><td style="font-size: 14px;">POINT SMART (Tarjeta):</td><td class="amount" style="font-size: 16px;">${formatCurrency(resumen.point)}</td></tr><tr style="border-top: 1px solid #ccc;"><td style="font-size: 14px;">FIADO / CTA CTE:</td><td class="amount danger" style="font-size: 16px;">${formatCurrency(resumen.saldoPendiente)}</td></tr><tr style="border-top: 2px solid #333; background-color: #fff;"><td><strong>TOTAL VENTA RUTA:</strong></td><td class="amount" style="font-size: 20px;"><strong>${formatCurrency(resumen.totalVenta)}</strong></td></tr>${cobranzasBoxHtml}</table></div><h3>2. RETORNO DE MERCADERÍA (STOCK)</h3>${devolucionesRows.length > 0 ? `<table><thead><tr><th style="width:100px; text-align:center;">CANT. A BAJAR</th><th>PRODUCTO</th></tr></thead><tbody>${devolucionesRows}</tbody></table>` : '<p style="font-style: italic; color: #7f8c8d; padding: 10px; border: 1px dashed #ccc;">No hubo rechazos ni ediciones. El camión vuelve vacío.</p>'}<h3>3. Detalle por Cliente</h3><table><thead><tr><th>Cliente</th><th>Estado</th><th class="amount">Total</th><th class="amount">Efvo.</th><th class="amount">Transf.</th><th class="amount">QR</th><th class="amount">Point</th><th class="amount">Deuda</th></tr></thead><tbody>${facturasRows}</tbody></table><div style="margin-top: 60px; display: flex; justify-content: space-between;"><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Responsable Caja</div><div style="text-align: center; width: 40%; border-top: 1px solid #000; padding-top: 5px;">Firma Repartidor</div></div></body></html>`;
 };
 
 // --- HOOK DE DATOS ---
@@ -784,6 +805,8 @@ function Rutas() {
     const { data: allVendors, isLoading: vendorsLoading } = useFirestoreSubscription('vendedores');
     const { data: clientes, isLoading: clientesLoading } = useFirestoreSubscription('clientes');
     const { data: zonas, isLoading: zonasLoading } = useFirestoreSubscription('zonas');
+    // Cobros de saldos pendientes (cta. cte.) hechos por repartidores durante una ruta (doc.rutaId).
+    const { data: cobranzas, isLoading: cobranzasLoading } = useFirestoreSubscription('cobranzas');
     const { data: productos } = useFirestoreSubscription('productos');
     const { data: categorias } = useFirestoreSubscription('categorias');
 
@@ -1214,7 +1237,7 @@ function Rutas() {
         await batch.commit();
     };
 
-    if (routesLoading || invoicesLoading || vendorsLoading || clientesLoading || zonasLoading) {
+    if (routesLoading || invoicesLoading || vendorsLoading || clientesLoading || zonasLoading || cobranzasLoading) {
         return <div className="text-center p-10 text-gray-500 font-semibold">Cargando datos...</div>;
     }
 
@@ -1263,11 +1286,11 @@ function Rutas() {
                     </div>
                 )}
 
-                {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} />}
-                
+                {activeTab === 'rendicion' && <TabContentRendicion routes={rendicion} allInvoices={enrichedInvoices} cobranzas={cobranzas} />}
+
                 {activeTab === 'anuladas' && (
                     <div className="space-y-4">
-                        <TabContentRendicion routes={archivadas} allInvoices={enrichedInvoices} />
+                        <TabContentRendicion routes={archivadas} allInvoices={enrichedInvoices} cobranzas={cobranzas} />
                         {archivadas.length === 0 && <EmptyState message="No hay historial de rutas rendidas." />}
                     </div>
                 )}
@@ -1558,7 +1581,7 @@ const CierreManualModal = ({ route, invoices, onClose, onConfirm }) => {
     );
 };
 
-const TabContentRendicion = ({ routes, allInvoices }) => {
+const TabContentRendicion = ({ routes, allInvoices, cobranzas = [] }) => {
     const [expandedRouteId, setExpandedRouteId] = useState(null);
     const { updateTenantDoc, deleteTenantDoc } = useFirestore();
     const handleArchiveRoute = async (route) => {
@@ -1578,9 +1601,20 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                     transferencia: acc.transferencia + (i.pagoTransferencia || 0), 
                     qr: acc.qr + (i.pagoQR || 0),
                     point: acc.point + (i.pagoPoint || 0),
-                    pendiente: acc.pendiente + (i.saldoPendiente || 0), 
-                    total: acc.total + (i.totalVenta || 0) 
+                    pendiente: acc.pendiente + (i.saldoPendiente || 0),
+                    total: acc.total + (i.totalVenta || 0)
                 }), { efectivo: 0, transferencia: 0, qr: 0, point: 0, pendiente: 0, total: 0 });
+
+                // Cobros de saldos pendientes de OTRAS ventas, cobrados por el repartidor durante esta ruta.
+                const routeCobranzas = cobranzas.filter(c => c.rutaId === route.id);
+                const cobranzasTotals = routeCobranzas.reduce((acc, c) => ({
+                    efectivo: acc.efectivo + (c.metodoPago === 'Efectivo' ? (c.monto || 0) : 0),
+                    transferencia: acc.transferencia + (c.metodoPago === 'Transferencia' ? (c.monto || 0) : 0),
+                    qr: acc.qr + (c.metodoPago === 'QR' ? (c.monto || 0) : 0),
+                    point: acc.point + (c.metodoPago === 'Point' ? (c.monto || 0) : 0),
+                    total: acc.total + (c.monto || 0),
+                }), { efectivo: 0, transferencia: 0, qr: 0, point: 0, total: 0 });
+
                 const isExpanded = expandedRouteId === route.id;
                 const isArchived = route.estado === 'Archivada';
                 return (
@@ -1591,14 +1625,29 @@ const TabContentRendicion = ({ routes, allInvoices }) => {
                                 <div><h3 className="text-lg font-bold text-gray-900">{route.nombre}</h3><p className="text-sm text-gray-500 font-medium">{route.repartidorNombre} {isArchived && <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">FINALIZADA</span>}</p></div>
                             </div>
                             <div className="flex items-center gap-8">
-                                <div className="text-right hidden md:block"><span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (E+T+QR+P)'}</span><span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia + totals.qr + totals.point)}</span></div>
+                                <div className="text-right hidden md:block">
+                                    <span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">{isArchived ? 'Rendido' : 'Recaudado (E+T+QR+P)'}</span>
+                                    <span className="text-xl font-bold text-gray-900">{formatCurrency(totals.efectivo + totals.transferencia + totals.qr + totals.point + cobranzasTotals.total)}</span>
+                                    {cobranzasTotals.total > 0 && <span className="block text-[10px] font-bold text-amber-600 mt-0.5">incl. {formatCurrency(cobranzasTotals.total)} de saldos pendientes</span>}
+                                </div>
                                 <button className={`w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-gray-200' : ''}`}><ChevronDownIcon className="w-5 h-5 text-gray-600"/></button>
                             </div>
                         </div>
                         {isExpanded && (
                             <div className="bg-gray-50/50 border-t border-gray-100 p-6">
+                                {cobranzasTotals.total > 0 && (
+                                    <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                        <p className="text-xs font-bold text-amber-700 uppercase mb-2">Cobros de saldos pendientes durante esta ruta (ajenos a las facturas de hoy)</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                                            <div><p className="text-[9px] font-bold text-amber-500 uppercase">Efectivo</p><p className="text-sm font-bold text-amber-800">{formatCurrency(cobranzasTotals.efectivo)}</p></div>
+                                            <div><p className="text-[9px] font-bold text-amber-500 uppercase">Transferencia</p><p className="text-sm font-bold text-amber-800">{formatCurrency(cobranzasTotals.transferencia)}</p></div>
+                                            <div><p className="text-[9px] font-bold text-amber-500 uppercase">QR</p><p className="text-sm font-bold text-amber-800">{formatCurrency(cobranzasTotals.qr)}</p></div>
+                                            <div><p className="text-[9px] font-bold text-amber-500 uppercase">Point</p><p className="text-sm font-bold text-amber-800">{formatCurrency(cobranzasTotals.point)}</p></div>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="flex justify-end gap-4">
-                                    <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices))} className="py-3 px-6 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 flex items-center gap-2"><PrinterIcon className="w-5 h-5 text-gray-500"/> {isArchived ? 'Reimprimir Reporte' : 'Imprimir Reporte'}</button>
+                                    <button onClick={() => printHTML(generateSettlementReportHTML(route, routeInvoices, routeCobranzas))} className="py-3 px-6 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 flex items-center gap-2"><PrinterIcon className="w-5 h-5 text-gray-500"/> {isArchived ? 'Reimprimir Reporte' : 'Imprimir Reporte'}</button>
                                     {!isArchived ? (
                                         <button onClick={() => handleArchiveRoute(route)} className="py-3 px-6 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-black flex items-center gap-2"><ArchiveIcon className="w-5 h-5"/> Confirmar y Cerrar Ruta</button>
                                     ) : (
