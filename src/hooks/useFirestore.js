@@ -52,7 +52,7 @@ export const useFirestore = () => {
      */
     const onTenantSnapshot = React.useCallback((path, callback, orders = [], onError = null) => {
         let q = getTenantCollection(path);
-        
+
         if (Array.isArray(orders)) {
             orders.forEach(o => {
                 q = query(q, orderBy(o.field, o.direction || 'asc'));
@@ -65,6 +65,49 @@ export const useFirestore = () => {
         });
     }, [getTenantCollection]);
 
+    /**
+     * Arma un Query jerárquico con filtros where + orderBy + limit dinámicos.
+     * wheres: array de tuplas [field, op, value].
+     */
+    const queryTenantCollection = React.useCallback((path, { wheres = [], orders = [], limitCount = null } = {}) => {
+        let q = getTenantCollection(path);
+
+        wheres.forEach(([field, op, value]) => {
+            q = query(q, where(field, op, value));
+        });
+
+        orders.forEach(o => {
+            q = query(q, orderBy(o.field, o.direction || 'asc'));
+        });
+
+        if (limitCount) {
+            q = query(q, limit(limitCount));
+        }
+
+        return q;
+    }, [getTenantCollection]);
+
+    /**
+     * Lectura puntual (sin suscripción) con filtros where/orderBy/limit.
+     * Pensado para reportes de rangos históricos que no necesitan estar "en vivo".
+     */
+    const getTenantDocsOnce = React.useCallback(async (path, options = {}) => {
+        const q = queryTenantCollection(path, options);
+        return await getDocs(q);
+    }, [queryTenantCollection]);
+
+    /**
+     * Como onTenantSnapshot, pero acepta filtros where dinámicos (para rangos "en vivo").
+     */
+    const onTenantSnapshotFiltered = React.useCallback((path, callback, options = {}, onError = null) => {
+        const q = queryTenantCollection(path, options);
+
+        return onSnapshot(q, callback, (error) => {
+            if (onError) onError(error);
+            console.error(`Error en Snapshot de ${path}:`, error);
+        });
+    }, [queryTenantCollection]);
+
     return {
         tenantId,
         getTenantCollection,
@@ -73,6 +116,9 @@ export const useFirestore = () => {
         updateTenantDoc,
         deleteTenantDoc,
         onTenantSnapshot,
-        db 
+        queryTenantCollection,
+        getTenantDocsOnce,
+        onTenantSnapshotFiltered,
+        db
     };
 };

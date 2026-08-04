@@ -40,6 +40,8 @@ export default defineConfig({
             if (id.includes('firebase')) return 'vendor-firebase';
             if (id.includes('react')) return 'vendor-react';
             if (id.includes('lucide') || id.includes('heroicons')) return 'vendor-icons';
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'vendor-charts';
+            if (id.includes('leaflet')) return 'vendor-maps';
             return 'vendor'; // El resto de librerías
           }
         }
