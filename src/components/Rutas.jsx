@@ -256,10 +256,10 @@ const generateRouteListHTML = (invoices, routeName, repartidorNombre, zonaMap = 
     <body>
         <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 6px;">
             <div>
-                <h1 style="font-size: 14px;">Hoja de Ruta</h1>
-                <h2 style="font-size: 10px; font-weight: normal; color: #475569; margin-top: 1px;">${routeName} &nbsp;·&nbsp; Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h2>
+                <h1 style="font-size: 28px;">Hoja de Ruta</h1>
+                <h2 style="font-size: 20px; font-weight: 700; color: #475569; margin-top: 1px;">${routeName} &nbsp;·&nbsp; Repartidor: <strong style="color: #0f172a;">${repartidorNombre}</strong></h2>
             </div>
-            <div style="text-align:right; font-size: 8px; color: #94a3b8;">
+            <div style="text-align:right; font-size: 17px; font-weight: 700; color: #475569;">
                 Emitido: ${new Date().toLocaleString('es-AR')}<br/>
                 Paradas: <strong style="color:#0f172a;">${invoices.length}</strong><br/>
                 Zonas: <strong style="color:#0f172a;">${zonasCubiertas.join(', ')}</strong>
@@ -339,8 +339,21 @@ const getAfipQrUrl = (venta, config) => {
     }
 };
 
+// Convierte el id de Firestore (alfanumérico) en un número de 8 dígitos estable,
+// para que los remitos (sin CAE, sin numeración AFIP) muestren un "Comp. Nro"
+// numérico y prolijo en vez del id crudo. Es determinístico por id, así que
+// no requiere migrar remitos ya existentes: el mismo remito siempre imprime
+// el mismo número.
+const idToNumeroRemito = (id) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    }
+    return String(hash % 100000000).padStart(8, '0');
+};
+
 // --- PDF DE FACTURA "AFIP COMPACTO & LIMPIO" ---
-const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) => {
+const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config, vendedorNombre) => {
     const fechaImpresion = venta.fecha ? (venta.fecha instanceof Date ? venta.fecha : new Date(venta.fecha.seconds * 1000)) : new Date();
 
     const tieneCAE = !!venta.afipCAE;
@@ -350,7 +363,9 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
 
     const ptoVtaStr = String(config?.ptoVta || "00001").padStart(5, '0');
-    const numCompStr = String(venta.afipNumeroComprobante || venta.id.substring(0, 8)).padStart(8, '0');
+    const numCompStr = venta.afipNumeroComprobante
+        ? String(venta.afipNumeroComprobante).padStart(8, '0')
+        : idToNumeroRemito(venta.id);
 
     const formatCuit = (val) => {
         const c = String(val || '').replace(/\D/g, '');
@@ -430,10 +445,12 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
                         <h2 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
                         <p style="margin: 0; font-size: 10px; line-height: 1.6; color: #0f172a;">
                             <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
-                            <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                            <span style="color:#374151;">Fecha de Emisión:</span> <strong style="color:#0f172a; font-size: 11px;">${fechaImpresion.toLocaleDateString('es-AR')}</strong>
+                        </p>
+                        <p style="margin: 4px 0 0 0; padding-top: 3px; border-top: 1px dashed #cbd5e1; font-size: 8.5px; line-height: 1.6; color: #64748b;">
                             <span style="color:#374151;">CUIT:</span> ${formatCuit(config?.cuit)}
                             ${config?.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
-                            ${config?.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                            ${config?.inicioActividades ? `<br><span style="color:#374151;">Inicio de Actividades:</span> ${config.inicioActividades}` : ''}
                         </p>
                     </td>
                 </tr>
@@ -462,6 +479,15 @@ const generateInvoiceHtmlContent = (venta, clientDetails, zonaNombre, config) =>
                             &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
                             <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Cond. IVA:</span>
                             <span style="font-size: 10px; color: #0f172a;"> ${condIvaTexto}</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="3" style="padding-top: 3px; vertical-align: top;">
+                            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Zona:</span>
+                            <span style="font-size: 10px; font-weight: 700; color: #0f172a;"> ${zonaNombre || 'General'}</span>
+                            &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
+                            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Vendedor:</span>
+                            <span style="font-size: 10px; font-weight: 700; color: #0f172a;"> ${vendedorNombre || 'N/A'}</span>
                         </td>
                     </tr>
                 </table>
@@ -1024,7 +1050,8 @@ function Rutas() {
         const printPromises = facturasParaImprimir.map(async (fac) => {
             const client = clientes.find(c => c.id === fac.clienteId) || {};
             const zona = zonas.find(z => z.id === fac.zonaId) || { nombre: 'General' };
-            return generateInvoiceHtmlContent(fac, client, zona.nombre, config);
+            const vendedorNombre = fac.vendedorNombre || allVendors.find(v => v.id === fac.vendedorId)?.nombreCompleto || 'N/A';
+            return generateInvoiceHtmlContent(fac, client, zona.nombre, config, vendedorNombre);
         });
         
         const invoicesHtmls = await Promise.all(printPromises);
