@@ -38,11 +38,11 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('firebase')) return 'vendor-firebase';
-            if (id.includes('react')) return 'vendor-react';
+            if (id.includes('react') || id.includes('scheduler') || id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'vendor-react';
             if (id.includes('lucide') || id.includes('heroicons')) return 'vendor-icons';
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'vendor-charts';
             if (id.includes('leaflet')) return 'vendor-maps';
-            return 'vendor'; // El resto de librerías
+            // El resto de librerías: se deja que Rollup las agrupe automáticamente
+            // para evitar dependencias circulares entre chunks manuales (rompía el build en prod).
           }
         }
       }

@@ -30,6 +30,19 @@ const UserIcon = () => <Icono path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 01
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
+// Convierte el id de Firestore (alfanumérico) en un número de 8 dígitos estable,
+// para que los remitos (sin CAE, sin numeración AFIP) muestren un "Comp. Nro"
+// numérico y prolijo en vez del id crudo. Es determinístico por id, así que
+// no requiere migrar remitos ya existentes: el mismo remito siempre imprime
+// el mismo número.
+const idToNumeroRemito = (id) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    }
+    return String(hash % 100000000).padStart(8, '0');
+};
+
 // --- HELPERS DE IMPRESIÓN POS ---
 const formatAfipDate = (dateStr) => {
     if (!dateStr || dateStr.length !== 8) return dateStr || '';
@@ -77,7 +90,9 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
     const tituloComprobante = tieneCAE ? 'FACTURA' : 'REMITO';
     const codComprobante = tieneCAE ? (letra === 'A' ? 'COD. 001' : letra === 'B' ? 'COD. 006' : 'COD. 011') : 'COD. 000';
     const ptoVtaStr = String(config.ptoVta || '00001').padStart(5, '0');
-    const numCompStr = String(venta.afipNumeroComprobante || (venta.id ? venta.id.substring(0, 8) : '00000000')).padStart(8, '0');
+    const numCompStr = venta.afipNumeroComprobante
+        ? String(venta.afipNumeroComprobante).padStart(8, '0')
+        : idToNumeroRemito(venta.id || '');
 
     const formatCuit = (val) => {
         const c = String(val || '').replace(/\D/g, '');
@@ -156,10 +171,12 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                     <h2 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: 1px;">${tituloComprobante}</h2>
                     <p style="margin: 0; font-size: 11px; line-height: 1.7; color: #0f172a;">
                         <strong style="color:#0f172a;">Pto. Venta: ${ptoVtaStr}</strong> &nbsp; <strong style="color:#0f172a;">Comp. Nro: ${numCompStr}</strong><br>
-                        <span style="color:#374151;">Fecha de Emisión:</span> ${fechaImpresion.toLocaleDateString('es-AR')}<br>
+                        <span style="color:#374151;">Fecha de Emisión:</span> <strong style="color:#0f172a; font-size: 12px;">${fechaImpresion.toLocaleDateString('es-AR')}</strong>
+                    </p>
+                    <p style="margin: 5px 0 0 0; padding-top: 4px; border-top: 1px dashed #cbd5e1; font-size: 9.5px; line-height: 1.7; color: #64748b;">
                         <span style="color:#374151;">CUIT:</span> ${formatCuit(config.cuit)}
                         ${config.iibb ? `<br><span style="color:#374151;">Ing. Brutos:</span> ${config.iibb}` : ''}
-                        ${config.inicioActividades ? `<br><span style="color:#374151;">Inicio Act.:</span> ${config.inicioActividades}` : ''}
+                        ${config.inicioActividades ? `<br><span style="color:#374151;">Inicio de Actividades:</span> ${config.inicioActividades}` : ''}
                     </p>
                 </td>
             </tr>
@@ -184,10 +201,16 @@ const printInvoicePDF = (venta, clientDetails, zonaNombre) => {
                 <tr>
                     <td colspan="3" style="padding-top: 3px; vertical-align: top;">
                         <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Zona:</span>
-                        <span style="font-size: 11px; color: #0f172a;"> ${zonaNombre}</span>
+                        <span style="font-size: 11px; font-weight: 700; color: #0f172a;"> ${zonaNombre}</span>
                         &nbsp;&nbsp;<span style="color:#cbd5e1;">|</span>&nbsp;&nbsp;
                         <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Cond. IVA:</span>
                         <span style="font-size: 11px; color: #0f172a;"> ${condIvaTexto}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding-top: 3px; vertical-align: top;">
+                        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151;">Vendedor:</span>
+                        <span style="font-size: 11px; font-weight: 700; color: #0f172a;"> ${venta.vendedorNombre || 'N/A'}</span>
                     </td>
                 </tr>
             </table>
