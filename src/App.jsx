@@ -172,7 +172,7 @@ function AppContent() {
 
           {/* ✅ 5. POS MÓVIL (Venta caliente desde el celular) */}
           <Route
-            path="/pos-movil"
+            path="/movil"
             element={
               <RequireAuth>
                 <POSMovil />
