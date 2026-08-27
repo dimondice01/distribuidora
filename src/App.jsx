@@ -26,6 +26,9 @@ import CompanySettings from './components/CompanySettings.jsx';     // CONFIGURA
 // ✅ PWA PARA TÉCNICOS (Matafuegos)
 import TecnicoApp from './modules/tecnico/pages/TecnicoApp.jsx';
 
+// ✅ POS MÓVIL (Venta caliente desde el celular + ticket térmico 58mm)
+import POSMovil from './modules/posmovil/POSMovil.jsx';
+
 // Librería de Notificaciones
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -166,6 +169,16 @@ function AppContent() {
 
           {/* ✅ 4. RUTA MINI PWA (Técnicos) */}
           <Route path="/tecnico" element={<TecnicoApp />} />
+
+          {/* ✅ 5. POS MÓVIL (Venta caliente desde el celular) */}
+          <Route
+            path="/pos-movil"
+            element={
+              <RequireAuth>
+                <POSMovil />
+              </RequireAuth>
+            }
+          />
 
           {/* Redirección por defecto */}
           <Route path="*" element={<Navigate to="/" />} />
