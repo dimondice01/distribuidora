@@ -1294,7 +1294,7 @@ function Facturacion() {
                                                             <option value="Pagada">Pagada</option>
                                                         </select>
                                                     )}
-                                                    {!venta.afipCAE && ['Pagada', 'Entregada', 'Pendiente de Entrega', 'Repartiendo'].includes(venta.estado) && (
+                                                    {!venta.afipCAE && ['Pagada', 'Adeuda', 'Entregada', 'Pendiente de Entrega', 'Repartiendo'].includes(venta.estado) && (
                                                         <button
                                                             onClick={() => handleEmitirFacturaARCA(venta)}
                                                             disabled={isEmittingARCA === venta.id}

@@ -282,17 +282,9 @@ export function usePOSSale() {
 
             toast.success(esCuentaCorriente ? `Guardado en cuenta corriente — ${client.nombre}.` : "Venta procesada!");
 
-            if (esCuentaCorriente) {
-                setCart([]);
-                setSelectedClientId('');
-                setIsForDelivery(false);
-                setIsSaving(false);
-                return true;
-            }
-
             let saleForPDF = { ...saleData, id: finalSaleId };
 
-            if (isAfipEnabled) {
+            if (isAfipEnabled && !esCuentaCorriente) {
                 setIsSaving("Procesando AFIP/ARCA...");
                 toast.info("Conectando con ARCA (AFIP)...");
                 try {

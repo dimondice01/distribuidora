@@ -6,6 +6,7 @@ import { useShift } from '../../contexts/ShiftContext.jsx';
 import { useTenant } from '../../contexts/TenantContext.jsx';
 import { useFirestore } from '../../hooks/useFirestore';
 import { usePOSSale } from '../../hooks/usePOSSale';
+import FacturacionMovil from './FacturacionMovil';
 
 // --- ICONOS ---
 const Icono = ({ path, className = "w-5 h-5", d2 }) => (
@@ -24,6 +25,7 @@ const UserIcon = (p) => <Icono {...p} path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3
 const CloseIcon = (p) => <Icono {...p} path="M6 18L18 6M6 6l12 12" />;
 const LogoutIcon = (p) => <Icono {...p} path="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />;
 const PrinterIcon = (p) => <Icono {...p} path="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />;
+const DocIcon = (p) => <Icono {...p} path="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />;
 
 const formatCurrency = (value) => (typeof value === 'number' ? `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0,00');
 
@@ -504,6 +506,7 @@ const POSMovil = () => {
     const [isClientOpen, setIsClientOpen] = useState(false);
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [isPromoListOpen, setIsPromoListOpen] = useState(false);
+    const [isFacturacionOpen, setIsFacturacionOpen] = useState(false);
     const [qtyModalProduct, setQtyModalProduct] = useState(null);
     const [initialCash, setInitialCash] = useState(0);
     const [showOpenShift, setShowOpenShift] = useState(false);
@@ -531,7 +534,17 @@ const POSMovil = () => {
                         <button onClick={() => { openShift(initialCash); setInitialCash(0); }} className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl">INICIAR TURNO</button>
                     </div>
                 )}
-                <button onClick={() => navigate('/')} className="mt-8 text-xs font-bold text-slate-400 underline">Ir al panel de escritorio</button>
+                <button onClick={() => setIsFacturacionOpen(true)} className="mt-8 flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-widest"><DocIcon className="w-4 h-4" /> Ver Facturación</button>
+                <button onClick={() => navigate('/')} className="mt-3 text-xs font-bold text-slate-400 underline">Ir al panel de escritorio</button>
+                {isFacturacionOpen && (
+                    <FacturacionMovil
+                        clients={sale.clients}
+                        zonas={sale.zonas}
+                        companyConfig={sale.companyConfig}
+                        logo={logo}
+                        onClose={() => setIsFacturacionOpen(false)}
+                    />
+                )}
             </div>
         );
     }
@@ -553,6 +566,7 @@ const POSMovil = () => {
                             🔥 <span className="hidden xs:inline">Promos</span>
                         </button>
                     )}
+                    <button onClick={() => setIsFacturacionOpen(true)} className="p-2 text-slate-400 hover:text-amber-400"><DocIcon className="w-5 h-5" /></button>
                     <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-rose-400"><LogoutIcon className="w-5 h-5" /></button>
                 </div>
             </div>
@@ -650,6 +664,15 @@ const POSMovil = () => {
                 />
             )}
             {isPromoListOpen && <PromoListSheet promotions={sale.promotions} onClose={() => setIsPromoListOpen(false)} />}
+            {isFacturacionOpen && (
+                <FacturacionMovil
+                    clients={sale.clients}
+                    zonas={sale.zonas}
+                    companyConfig={sale.companyConfig}
+                    logo={logo}
+                    onClose={() => setIsFacturacionOpen(false)}
+                />
+            )}
             {isCartOpen && (
                 <CartSheet
                     sale={sale}

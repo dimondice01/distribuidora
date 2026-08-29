@@ -653,18 +653,10 @@ const POS = () => {
 
             toast.success(esCuentaCorriente ? `Guardado en cuenta corriente — ${client.nombre}.` : "Venta procesada!");
 
-            if (esCuentaCorriente) {
-                setCart([]);
-                setSelectedClientId('');
-                setIsForDelivery(false);
-                setIsPaymentModalOpen(false);
-                return;
-            }
-
             // 3. Si requiere factura AFIP/ARCA, llamar a la Cloud Function
             let saleForPDF = { ...saleData, id: finalSaleId };
 
-            if (isAfipEnabled) {
+            if (isAfipEnabled && !esCuentaCorriente) {
                 setIsSaving("Procesando AFIP/ARCA...");
                 toast.info("Conectando con ARCA (AFIP)...");
                 try {
