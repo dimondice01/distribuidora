@@ -678,7 +678,13 @@ const PlannerView = ({ route, onClose, allPendingInvoices, repartidores, zonas, 
             await onDispatch(route.id, assignedRepartidor, facturasAEnviar, routeSummary, duplicarTicket);
             onClose();
         } catch (error) {
-            toast.error("Error al despachar: " + error.message);
+            const msg = error?.message || '';
+            const isNetworkGlitch = msg.includes('INTERNAL ASSERTION') || msg.includes('network-request-failed');
+            if (isNetworkGlitch) {
+                toast.error("⚠️ Se cortó la conexión al despachar. Verificá tu señal y recargá la página antes de reintentar (F5).", { autoClose: 10000 });
+            } else {
+                toast.error("Error al despachar: " + msg);
+            }
             setIsDispatching(false);
         }
     };
